@@ -1,0 +1,32 @@
+# Secrets — НИКОГДА не коммитить
+.env
+.env.*
+!.env.example
+*.save
+yml.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+cabinet/dist/
+*.local
+
+# Build artifacts / archives
+*.tar.gz
+backups/
+logs/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude
+.claude/

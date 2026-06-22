@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Font ---------- */
+:root {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---------- Dark theme (default) ---------- */
+:root,
+.theme-dark {
+  --bg: #08080b;
+  --bg-subtle: #0e0e12;
+  --bg-raised: #141418;
+  --bg-overlay: #1c1c22;
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --fg: #eeeef0;
+  --fg-muted: #888896;
+  --fg-subtle: #50505e;
+
+  --accent: #6366f1;
+  --accent-hover: #7375f3;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(99, 102, 241, 0.1);
+  --accent-glow: rgba(99, 102, 241, 0.18);
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  color-scheme: dark;
+}
+
+/* ---------- Light theme ---------- */
+.theme-light {
+  --bg: #ffffff;
+  --bg-subtle: #f7f7f8;
+  --bg-raised: #ffffff;
+  --bg-overlay: #ffffff;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+
+  --fg: #09090b;
+  --fg-muted: #71717a;
+  --fg-subtle: #a1a1aa;
+
+  --accent: #6366f1;
+  --accent-hover: #5355e8;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(99, 102, 241, 0.08);
+  --accent-glow: rgba(99, 102, 241, 0.14);
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  color-scheme: light;
+}
+
+/* ---------- Base ---------- */
+html,
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100dvh;
+  min-height: var(--tg-viewport-stable-height, 100dvh);
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* ---------- Utilities ---------- */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 999px;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 25%,
+    var(--bg-raised) 50%,
+    var(--bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* ---------- Form ---------- */
+.input {
+  @apply w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-subtle)] transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--accent)] focus:border-[var(--accent)];
+}
+
+.theme-dark .input {
+  border-color: rgba(255, 255, 255, 0.07);
+}
