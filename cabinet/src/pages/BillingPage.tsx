@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { clsx } from "clsx";
-import { Check, Wifi, Smartphone } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { subscriptionApi } from "@/api/subscription";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatTrafficLimit } from "@/lib/format";
-import { useAuth } from "@/contexts/AuthContext";
 import type {
-  DurationOfferResponse,
   PaymentGatewayType,
   PlanOfferResponse,
   SubscriptionOffersResponse,
@@ -18,109 +14,133 @@ import { ApiError } from "@/types/api";
 
 const gatewayLabels: Record<string, string> = {
   YOOKASSA: "ЮKassa (карта)",
+  YOOMONEY: "ЮMoney",
+  PLATEGA: "Platega",
   CRYPTOMUS: "Криптовалюта",
   TELEGRAM_STARS: "Telegram Stars",
 };
 
-function PlanCard({
-  plan,
-  isSelected,
-  onSelect,
-}: {
-  plan: PlanOfferResponse;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className={clsx(
-        "w-full flex flex-col gap-3 rounded-xl border p-4 text-left transition-all duration-150",
-        isSelected
-          ? "border-accent bg-accent-subtle shadow-glow"
-          : "border-border-subtle bg-bg-raised hover:border-border",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-fg">{plan.name}</h3>
-        {isSelected && <Check className="h-4 w-4 text-accent" />}
-      </div>
-      {plan.description && (
-        <p className="text-xs text-fg-subtle">{plan.description}</p>
-      )}
-      <div className="flex flex-col gap-1 text-xs text-fg-muted">
-        <span className="flex items-center gap-1.5">
-          <Wifi className="h-3.5 w-3.5" /> {formatTrafficLimit(plan.traffic_limit)}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Smartphone className="h-3.5 w-3.5" /> до {plan.device_limit} устройств
-        </span>
-      </div>
-    </button>
-  );
+function priceFor(plan: PlanOfferResponse, days: number | null, gw: PaymentGatewayType | null) {
+  if (days == null || gw == null) return null;
+  const d = plan.durations.find((x) => x.days === days);
+  if (!d) return null;
+  return d.prices.find((p) => p.gateway_type === gw) ?? null;
 }
 
-function DurationSelector({
-  durations,
-  selectedDays,
-  onSelect,
-  gatewayType,
+function isPopular(plan: PlanOfferResponse): boolean {
+  const hay = `${plan.name} ${plan.description ?? ""}`.toLowerCase();
+  return hay.includes("хит") || hay.includes("популярн");
+}
+
+/** Маркетинговая карточка тарифа: цена за выбранный срок, список фич, кнопка. */
+function PlanCard({
+  plan,
+  days,
+  gateway,
+  busy,
+  onBuy,
 }: {
-  durations: DurationOfferResponse[];
-  selectedDays: number | null;
-  onSelect: (days: number) => void;
-  gatewayType: PaymentGatewayType | null;
+  plan: PlanOfferResponse;
+  days: number | null;
+  gateway: PaymentGatewayType | null;
+  busy: boolean;
+  onBuy: () => void;
 }) {
+  const price = priceFor(plan, days, gateway);
+  const popular = isPopular(plan);
+  const perMonth =
+    price && !price.is_free && days && days >= 30
+      ? Math.round(Number(price.final_amount) / (days / 30))
+      : null;
+
+  const features = [
+    plan.traffic_limit === 0 ? "Безлимитный трафик" : formatTrafficLimit(plan.traffic_limit),
+    `До ${plan.device_limit} устройств`,
+    "Все локации",
+    "Подключение на любой платформе",
+  ];
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {durations.map((duration) => {
-        const price = duration.prices.find((p) => p.gateway_type === gatewayType);
-        const isSelected = selectedDays === duration.days;
-        return (
-          <button
-            key={duration.days}
-            onClick={() => onSelect(duration.days)}
-            className={clsx(
-              "flex flex-col items-center gap-1 rounded-xl border p-3 transition-all",
-              isSelected
-                ? "border-accent bg-accent-subtle"
-                : "border-border-subtle bg-bg-subtle hover:border-border",
-            )}
-          >
-            <span className="text-sm font-medium text-fg">{duration.days} дн.</span>
-            {price && (
-              <span className="text-xs text-fg-subtle">
-                {price.is_free ? (
-                  <span className="text-success">бесплатно</span>
-                ) : (
-                  <>
-                    {price.discount_percent > 0 && (
-                      <span className="mr-1 line-through opacity-60">
-                        {price.original_amount}
-                      </span>
-                    )}
-                    {price.final_amount} {price.currency_symbol}
-                  </>
-                )}
+    <div
+      className={clsx(
+        "relative flex flex-col rounded-[22px] border p-6 transition-all duration-200",
+        popular
+          ? "border-accent bg-accent-subtle/40 shadow-[0_18px_50px_-20px_var(--accent-glow)] sm:-translate-y-1"
+          : "border-[var(--border-subtle)] bg-bg-raised hover:-translate-y-0.5 hover:border-[var(--accent)]/50",
+      )}
+    >
+      {popular && (
+        <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-[0_6px_16px_-6px_var(--accent-glow)]">
+          <Sparkles className="h-3 w-3" /> Хит
+        </span>
+      )}
+
+      <h3 className="text-[17px] font-bold leading-tight text-fg">{plan.name}</h3>
+      {plan.description && <p className="mt-1 text-xs text-fg-subtle">{plan.description}</p>}
+
+      {/* Цена */}
+      <div className="mt-5 flex items-end gap-2">
+        {price ? (
+          price.is_free ? (
+            <span className="text-3xl font-extrabold text-success">Бесплатно</span>
+          ) : (
+            <>
+              <span className="text-[34px] font-extrabold leading-none text-fg">
+                {price.final_amount}
               </span>
-            )}
-          </button>
-        );
-      })}
+              <span className="pb-1 text-lg font-semibold text-fg-muted">{price.currency_symbol}</span>
+              {price.discount_percent > 0 && (
+                <span className="pb-1.5 text-sm text-fg-subtle line-through">
+                  {price.original_amount}
+                </span>
+              )}
+            </>
+          )
+        ) : (
+          <span className="text-2xl font-bold text-fg-subtle">—</span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-fg-subtle">
+        {days ? `за ${days} дн.` : "выберите срок"}
+        {perMonth ? ` · ≈ ${perMonth} ${price?.currency_symbol}/мес` : ""}
+      </p>
+
+      {/* Фичи */}
+      <ul className="mt-5 flex flex-1 flex-col gap-2.5">
+        {features.map((f) => (
+          <li key={f} className="flex items-center gap-2 text-sm text-fg-muted">
+            <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+              <Check className="h-3 w-3" strokeWidth={3} />
+            </span>
+            {f}
+          </li>
+        ))}
+      </ul>
+
+      <button
+        onClick={onBuy}
+        disabled={busy || !price}
+        className={clsx(
+          "mt-6 inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60",
+          popular
+            ? "btn-gradient text-white"
+            : "border border-[var(--accent)]/40 bg-accent-subtle text-accent hover:bg-accent-subtle/80",
+        )}
+      >
+        {busy ? "Переход к оплате…" : "Выбрать"}
+      </button>
     </div>
   );
 }
 
 export default function BillingPage() {
-  const { user } = useAuth();
   const [offers, setOffers] = useState<SubscriptionOffersResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayType | null>(null);
-  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [purchasingCode, setPurchasingCode] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -129,12 +149,9 @@ export default function BillingPage() {
     try {
       const data = await subscriptionApi.offers();
       setOffers(data);
-      if (data.gateways.length > 0) {
-        setSelectedGateway(data.gateways[0]!.gateway_type);
-      }
-      if (data.plans.length > 0) {
-        setSelectedPlanCode(data.plans[0]!.public_code);
-      }
+      if (data.gateways.length > 0) setSelectedGateway(data.gateways[0]!.gateway_type);
+      const firstDuration = data.plans[0]?.durations[0]?.days ?? null;
+      setSelectedDays(firstDuration);
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Не удалось загрузить тарифы");
     } finally {
@@ -146,21 +163,23 @@ export default function BillingPage() {
     load();
   }, [load]);
 
-  const selectedPlan = offers?.plans.find((p) => p.public_code === selectedPlanCode);
+  // Доступные сроки (объединение по всем тарифам).
+  const termDays = useMemo(() => {
+    const set = new Set<number>();
+    offers?.plans.forEach((p) => p.durations.forEach((d) => set.add(d.days)));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [offers]);
 
-  const handlePurchase = async () => {
-    if (!selectedPlan || !selectedDays || !selectedGateway) return;
-    setIsPurchasing(true);
+  const handlePurchase = async (plan: PlanOfferResponse) => {
+    if (!selectedDays || !selectedGateway) return;
+    setPurchasingCode(plan.public_code);
     setPurchaseError(null);
     try {
-      const isRenew = selectedPlan.recommended_purchase_type === "RENEW";
+      const isRenew = plan.recommended_purchase_type === "RENEW";
       const result = isRenew
-        ? await subscriptionApi.extend({
-            duration_days: selectedDays,
-            gateway_type: selectedGateway,
-          })
+        ? await subscriptionApi.extend({ duration_days: selectedDays, gateway_type: selectedGateway })
         : await subscriptionApi.purchase({
-            plan_code: selectedPlan.public_code,
+            plan_code: plan.public_code,
             duration_days: selectedDays,
             gateway_type: selectedGateway,
           });
@@ -173,24 +192,22 @@ export default function BillingPage() {
     } catch (e) {
       const detail = e instanceof ApiError ? e.detail : "";
       const isEmailError =
-        detail.toLowerCase().includes("email") ||
-        detail.toLowerCase().includes("verified");
-      if (isEmailError) {
-        setPurchaseError("__email__");
-      } else {
-        setPurchaseError(detail || "Не удалось создать оплату");
-      }
+        detail.toLowerCase().includes("email") || detail.toLowerCase().includes("verified");
+      setPurchaseError(isEmailError ? "__email__" : detail || "Не удалось создать оплату");
     } finally {
-      setIsPurchasing(false);
+      setPurchasingCode(null);
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="text-xl font-semibold text-fg">Тарифы и оплата</h1>
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-24 w-full" />
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Тарифы</h1>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-80 w-full rounded-[22px]" />
+          <Skeleton className="h-80 w-full rounded-[22px]" />
+          <Skeleton className="h-80 w-full rounded-[22px]" />
+        </div>
       </div>
     );
   }
@@ -198,7 +215,7 @@ export default function BillingPage() {
   if (error) {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="text-xl font-semibold text-fg">Тарифы и оплата</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Тарифы</h1>
         <p className="text-sm text-danger">{error}</p>
       </div>
     );
@@ -207,64 +224,59 @@ export default function BillingPage() {
   if (!offers || offers.plans.length === 0) {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="text-xl font-semibold text-fg">Тарифы и оплата</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Тарифы</h1>
         <p className="text-sm text-fg-subtle">Сейчас нет доступных тарифов.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <h1 className="text-xl font-semibold text-fg">Тарифы и оплата</h1>
-
+    <div className="flex flex-col gap-6">
       <div>
-        <p className="mb-3 text-sm font-medium text-fg-muted">Тариф</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {offers.plans.map((plan) => (
-            <PlanCard
-              key={plan.public_code}
-              plan={plan}
-              isSelected={selectedPlanCode === plan.public_code}
-              onSelect={() => {
-                setSelectedPlanCode(plan.public_code);
-                setSelectedDays(null);
-              }}
-            />
-          ))}
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-fg sm:text-[28px]">Тарифы</h1>
+        <p className="mt-1.5 text-sm text-fg-muted">
+          Выберите срок и тариф — оплата картой, СБП или криптовалютой
+        </p>
       </div>
 
-      {selectedPlan && (
-        <div>
-          <p className="mb-3 text-sm font-medium text-fg-muted">Срок</p>
-          <DurationSelector
-            durations={selectedPlan.durations}
-            selectedDays={selectedDays}
-            onSelect={setSelectedDays}
-            gatewayType={selectedGateway}
-          />
+      {/* Срок — сегментированный переключатель (меняет цены на всех карточках) */}
+      {termDays.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {termDays.map((d) => (
+            <button
+              key={d}
+              onClick={() => setSelectedDays(d)}
+              className={clsx(
+                "rounded-xl border px-4 py-2 text-sm font-medium transition-all",
+                selectedDays === d
+                  ? "border-accent bg-accent-subtle text-accent"
+                  : "border-border-subtle bg-bg-subtle text-fg-muted hover:border-border",
+              )}
+            >
+              {d} дн.
+            </button>
+          ))}
         </div>
       )}
 
+      {/* Способ оплаты */}
       {offers.gateways.length > 1 && (
-        <div>
-          <p className="mb-3 text-sm font-medium text-fg-muted">Способ оплаты</p>
-          <div className="flex flex-wrap gap-2">
-            {offers.gateways.map((gw) => (
-              <button
-                key={gw.gateway_type}
-                onClick={() => setSelectedGateway(gw.gateway_type)}
-                className={clsx(
-                  "rounded-xl border px-4 py-2 text-sm font-medium transition-all",
-                  selectedGateway === gw.gateway_type
-                    ? "border-accent bg-accent-subtle text-accent"
-                    : "border-border-subtle bg-bg-subtle text-fg-muted hover:border-border",
-                )}
-              >
-                {gatewayLabels[gw.gateway_type] || gw.gateway_type}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">Оплата:</span>
+          {offers.gateways.map((gw) => (
+            <button
+              key={gw.gateway_type}
+              onClick={() => setSelectedGateway(gw.gateway_type)}
+              className={clsx(
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
+                selectedGateway === gw.gateway_type
+                  ? "border-accent bg-accent-subtle text-accent"
+                  : "border-border-subtle bg-bg-subtle text-fg-muted hover:border-border",
+              )}
+            >
+              {gatewayLabels[gw.gateway_type] || gw.gateway_type}
+            </button>
+          ))}
         </div>
       )}
 
@@ -272,15 +284,9 @@ export default function BillingPage() {
         <div className="rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
           <p className="text-sm font-medium text-danger">
             {purchaseError === "Unknown error" || purchaseError === "Internal Server Error"
-              ? "Ошибка соединения с платёжной системой"
+              ? "Ошибка соединения с платёжной системой. Попробуйте ещё раз или выберите другой способ."
               : purchaseError}
           </p>
-          {(purchaseError === "Unknown error" || purchaseError === "Internal Server Error" ||
-            purchaseError.includes("соединения") || purchaseError.includes("платёжной")) && (
-            <p className="mt-1 text-xs text-fg-muted">
-              Попробуйте ещё раз или выберите другой способ оплаты.
-            </p>
-          )}
         </div>
       )}
       {purchaseError === "__email__" && (
@@ -292,27 +298,19 @@ export default function BillingPage() {
         </div>
       )}
 
-      <Card variant="bordered" className="bg-grain">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-fg-muted">
-              {selectedPlan?.recommended_purchase_type === "RENEW"
-                ? "Продление подписки"
-                : "Оформление подписки"}
-            </p>
-            <p className="text-xs text-fg-subtle">
-              {selectedPlan?.name} · {selectedDays ? `${selectedDays} дн.` : "выберите срок"}
-            </p>
-          </div>
-          <Button
-            onClick={handlePurchase}
-            isLoading={isPurchasing}
-            disabled={!selectedPlan || !selectedDays || !selectedGateway}
-          >
-            Оплатить
-          </Button>
-        </div>
-      </Card>
+      {/* Карточки тарифов */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {offers.plans.map((plan) => (
+          <PlanCard
+            key={plan.public_code}
+            plan={plan}
+            days={selectedDays}
+            gateway={selectedGateway}
+            busy={purchasingCode === plan.public_code}
+            onBuy={() => handlePurchase(plan)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
