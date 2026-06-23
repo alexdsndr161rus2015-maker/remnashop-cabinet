@@ -17,10 +17,11 @@ import { subscriptionApi } from "@/api/subscription";
 import { referralApi } from "@/api/referral";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { TelegramLinkPrompt } from "@/components/TelegramLinkPrompt";
 import { formatBytes, formatTrafficLimit, formatDate, daysUntil } from "@/lib/format";
 import { ApiError } from "@/types/api";
 
-const REFRESH_SECONDS = 30;
+const REFRESH_SECONDS = 60 * 60; // автообновление раз в час
 
 /** Флаг страны картинкой (emoji-флаги не рендерятся на Windows). */
 function CountryFlag({ code }: { code: string }) {
@@ -59,7 +60,7 @@ export default function HomePage() {
     loadExtras();
   }, [loadExtras]);
 
-  // Автообновление каждые 30с
+  // Автообновление раз в час
   const reloadRef = useRef(() => {});
   reloadRef.current = () => {
     reload();
@@ -116,6 +117,9 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Ненавязчивое предложение привязать Telegram (только email-пользователям) */}
+      <TelegramLinkPrompt />
 
       {isLoading ? (
         <Skeleton className="h-72 w-full rounded-[22px]" />
@@ -223,7 +227,7 @@ export default function HomePage() {
           <div className="mt-5 flex items-center justify-between border-t border-[var(--border-subtle)] pt-4">
             <span className="tabular inline-flex items-center gap-1.5 text-xs text-fg-subtle">
               <RefreshCw className="h-3.5 w-3.5" />
-              {countdown}s
+              {Math.ceil(countdown / 60)} мин
             </span>
             <Link
               to="/subscription"

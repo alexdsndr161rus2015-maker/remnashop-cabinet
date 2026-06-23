@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { ApiError, type TelegramAuthRequest } from "@/types/api";
-import { getTelegramWebApp } from "@/hooks/useTelegramWebApp";
+import { getTelegramWebApp, whenTelegramReady } from "@/hooks/useTelegramWebApp";
 
 const TELEGRAM_BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "";
 
@@ -23,29 +23,46 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Mini App ожидается, пока асинхронно грузится Telegram SDK (см. index.html).
+  // Держим экран загрузки до окончания загрузки, чтобы не мелькала форма входа.
+  const [miniAppPending, setMiniAppPending] = useState(
+    () => Boolean(window.__tgWebAppExpected) && !window.__tgWebAppSettled,
+  );
   const miniAppAttempted = useRef(false);
 
   // При открытии в Mini App — сразу авторизуемся через initData.
+  // Ждём загрузки SDK, т.к. telegram-web-app.js грузится асинхронно.
   useEffect(() => {
     if (miniAppAttempted.current) return;
-    const initData = getTelegramInitData();
-    if (!initData) return;
+    let cancelled = false;
 
-    miniAppAttempted.current = true;
-    window.Telegram?.WebApp?.ready();
-    window.Telegram?.WebApp?.expand();
+    whenTelegramReady().then(() => {
+      if (cancelled) return;
+      setMiniAppPending(false);
 
-    setIsLoading(true);
-    loginWithTelegramWebApp({ init_data: initData })
-      .then(() => navigate("/"))
-      .catch((err) => {
-        setError(
-          err instanceof ApiError
-            ? err.detail
-            : "Не удалось войти через Telegram.",
-        );
-      })
-      .finally(() => setIsLoading(false));
+      const initData = getTelegramInitData();
+      if (!initData || miniAppAttempted.current) return;
+
+      miniAppAttempted.current = true;
+      window.Telegram?.WebApp?.ready();
+      window.Telegram?.WebApp?.expand();
+
+      setIsLoading(true);
+      loginWithTelegramWebApp({ init_data: initData })
+        .then(() => navigate("/"))
+        .catch((err) => {
+          setError(
+            err instanceof ApiError
+              ? err.detail
+              : "Не удалось войти через Telegram.",
+          );
+        })
+        .finally(() => setIsLoading(false));
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [loginWithTelegramWebApp, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,8 +93,8 @@ export default function LoginPage() {
     }
   };
 
-  // Если мы в Mini App — показываем экран загрузки пока идёт вход.
-  const isMiniApp = Boolean(getTelegramInitData());
+  // Если мы в Mini App (или ещё ждём загрузки его SDK) — показываем экран загрузки.
+  const isMiniApp = miniAppPending || Boolean(getTelegramInitData());
   if (isMiniApp) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg">

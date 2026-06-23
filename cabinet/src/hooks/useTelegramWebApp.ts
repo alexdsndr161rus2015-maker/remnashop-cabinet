@@ -19,12 +19,39 @@ interface TelegramWebApp {
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp };
+    // Выставляются inline-скриптом в index.html, пока асинхронно грузится SDK.
+    __tgWebAppExpected?: boolean;
+    __tgWebAppSettled?: boolean;
   }
 }
 
 export function getTelegramWebApp(): TelegramWebApp | null {
   const app = window.Telegram?.WebApp;
   return app && app.initData ? app : null;
+}
+
+/**
+ * Дожидается окончания загрузки Telegram SDK, если страница открыта как Mini App
+ * (SDK подгружается асинхронно — см. index.html). В обычном браузере и после
+ * загрузки SDK резолвится немедленно. Нужен, чтобы авто-вход по initData не
+ * срабатывал раньше, чем доступен window.Telegram.WebApp.
+ */
+export function whenTelegramReady(timeoutMs = 5000): Promise<void> {
+  if (!window.__tgWebAppExpected || window.__tgWebAppSettled) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("tg-webapp-settled", finish);
+      resolve();
+    };
+    window.addEventListener("tg-webapp-settled", finish);
+    // Страховка: не зависаем, если событие по какой-то причине не пришло.
+    setTimeout(finish, timeoutMs);
+  });
 }
 
 export function useIsMiniApp(): boolean {
