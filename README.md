@@ -48,16 +48,33 @@
 
 > Демонстрационные данные. Название и цвета настраиваются в админке.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/home.svg" alt="Главная кабинета"/><br/><sub><b>Кабинет — главная</b></sub></td>
-    <td width="50%"><img src="docs/screenshots/plans.svg" alt="Тарифы"/><br/><sub><b>Кабинет — тарифы</b></sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/admin.svg" alt="Админ-обзор"/><br/><sub><b>Админка — обзор</b></sub></td>
-    <td width="50%"><img src="docs/screenshots/appearance.svg" alt="Оформление"/><br/><sub><b>Админка — оформление</b></sub></td>
-  </tr>
-</table>
+**Кабинет — главная**
+
+<img src="docs/screenshots/home.svg" alt="Кабинет — главная" width="100%"/>
+
+**Кабинет — тарифы**
+
+<img src="docs/screenshots/plans.svg" alt="Кабинет — тарифы" width="100%"/>
+
+**Админка — обзор**
+
+<img src="docs/screenshots/admin.svg" alt="Админка — обзор" width="100%"/>
+
+**Админка — оформление**
+
+<img src="docs/screenshots/appearance.svg" alt="Админка — оформление" width="100%"/>
+
+### ☀️ Светлая тема
+
+Кабинет поддерживает светлую и тёмную темы (плюс синхронизацию с Telegram).
+
+**Главная**
+
+<img src="docs/screenshots/home-light.svg" alt="Кабинет — главная (светлая тема)" width="100%"/>
+
+**Тарифы**
+
+<img src="docs/screenshots/plans-light.svg" alt="Кабинет — тарифы (светлая тема)" width="100%"/>
 
 ---
 
