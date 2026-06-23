@@ -15,6 +15,7 @@ import {
   Link2,
   Waves,
   LifeBuoy,
+  Palette,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
@@ -30,6 +31,7 @@ const navItems = [
   { to: "/admin/broadcasts", icon: Radio, label: "Рассылки" },
   { to: "/admin/remnawave", icon: Waves, label: "RemnaWave" },
   { to: "/admin/support", icon: LifeBuoy, label: "Поддержка" },
+  { to: "/admin/appearance", icon: Palette, label: "Оформление" },
   { to: "/admin/settings", icon: Settings, label: "Настройки" },
 ];
 
