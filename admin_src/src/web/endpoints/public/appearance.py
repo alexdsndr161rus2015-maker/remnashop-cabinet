@@ -19,7 +19,7 @@ BRANDING_PATH = ASSETS_DIR / "branding.json"
 
 # accent / background == None → кабинет использует цвета темы по умолчанию.
 DEFAULTS: dict[str, Any] = {
-    "brand_name": "RемнаShop",
+    "brand_name": "RemnaShop",
     "accent": None,
     "background": None,
 }

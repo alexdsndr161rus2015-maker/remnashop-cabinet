@@ -10,7 +10,7 @@ import {
 import { appearanceApi, type Appearance } from "@/api/appearance";
 import { lighten, darken, rgba, luminance, normalizeHex } from "@/lib/color";
 
-const DEFAULT_BRAND = "RемнаShop";
+const DEFAULT_BRAND = "RemnaShop";
 
 interface BrandingValue {
   brandName: string;

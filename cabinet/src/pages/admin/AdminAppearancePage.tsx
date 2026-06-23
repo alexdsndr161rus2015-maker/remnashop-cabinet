@@ -188,7 +188,7 @@ export default function AdminAppearancePage() {
         <h2 className="mb-3 text-sm font-semibold text-fg">Предпросмотр</h2>
         <div className="surface flex flex-col gap-3 p-5">
           <span className="brand-wordmark text-xl font-bold tracking-tight">
-            {form.brand_name || "RемнаShop"}
+            {form.brand_name || "RemnaShop"}
           </span>
           <div className="flex flex-wrap items-center gap-2">
             <span className="btn-gradient inline-flex h-9 items-center rounded-xl px-4 text-sm font-semibold text-white">
