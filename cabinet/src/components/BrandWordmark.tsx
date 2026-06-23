@@ -15,10 +15,10 @@ export function BrandWordmark({ className = "" }: { className?: string }) {
   const suffix = hasSuffix ? last : null;
 
   return (
-    <span className={`inline-flex items-baseline ${className}`}>
+    <span className={`inline-flex flex-col leading-none ${className}`}>
       <span className="brand-wordmark font-bold tracking-tight">{main}</span>
       {suffix && (
-        <span className="ml-[0.45em] text-[0.6em] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
+        <span className="mt-0.5 text-[0.5em] font-semibold uppercase tracking-[0.24em] text-fg-subtle">
           {suffix}
         </span>
       )}

@@ -1,45 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" font-family="Segoe UI, system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" font-family="Segoe UI, system-ui, sans-serif">
   <defs>
-    <linearGradient id="acc2" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="mp" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#4d8bff"/><stop offset="1" stop-color="#2bd4ee"/>
     </linearGradient>
   </defs>
-  <rect width="920" height="560" rx="14" fill="#0a0d15"/>
+  <rect width="920" height="600" rx="14" fill="#0a0d15"/>
 
-  <text x="40" y="58" fill="#eef3fb" font-size="24" font-weight="700">Тарифы</text>
-  <text x="40" y="82" fill="#9aa7bd" font-size="13">Выберите подходящий план — оплата картой, СБП или криптовалютой</text>
+  <text x="40" y="50" fill="#eef3fb" font-size="26" font-weight="800">Тарифы</text>
+  <text x="40" y="74" fill="#9aa7bd" font-size="13">Выберите срок и тариф — оплата картой, СБП или криптовалютой</text>
 
-  <!-- Plan 1 -->
-  <rect x="40" y="110" width="266" height="380" rx="18" fill="#111722" stroke="#1f2a3d"/>
-  <text x="64" y="150" fill="#eef3fb" font-size="16" font-weight="700">1 месяц</text>
-  <text x="64" y="196" fill="#eef3fb" font-size="30" font-weight="800">149 <tspan font-size="16" fill="#9aa7bd">₽</tspan></text>
-  <text x="64" y="240" fill="#9aa7bd" font-size="12">✓ Безлимитный трафик</text>
-  <text x="64" y="268" fill="#9aa7bd" font-size="12">✓ До 5 устройств</text>
-  <text x="64" y="296" fill="#9aa7bd" font-size="12">✓ Все локации</text>
-  <rect x="64" y="430" width="218" height="38" rx="11" fill="#1a2436"/>
-  <text x="173" y="454" fill="#9aa7bd" font-size="13" font-weight="600" text-anchor="middle">Выбрать</text>
+  <!-- term pills -->
+  <rect x="40" y="92" width="78" height="34" rx="11" fill="#13233f" stroke="#4d8bff" stroke-width="1.3"/>
+  <text x="79" y="114" fill="#4d8bff" font-size="12" font-weight="600" text-anchor="middle">30 дн.</text>
+  <rect x="126" y="92" width="78" height="34" rx="11" fill="#111722" stroke="#1f2a3d"/>
+  <text x="165" y="114" fill="#9aa7bd" font-size="12" text-anchor="middle">90 дн.</text>
+  <rect x="212" y="92" width="84" height="34" rx="11" fill="#111722" stroke="#1f2a3d"/>
+  <text x="254" y="114" fill="#9aa7bd" font-size="12" text-anchor="middle">180 дн.</text>
+  <rect x="304" y="92" width="84" height="34" rx="11" fill="#111722" stroke="#1f2a3d"/>
+  <text x="346" y="114" fill="#9aa7bd" font-size="12" text-anchor="middle">365 дн.</text>
 
-  <!-- Plan 2 (highlighted) -->
-  <rect x="327" y="98" width="266" height="404" rx="18" fill="#13233f" stroke="#4d8bff" stroke-width="1.5"/>
-  <rect x="453" y="86" width="86" height="22" rx="11" fill="url(#acc2)"/>
-  <text x="496" y="101" fill="#06121f" font-size="11" font-weight="700" text-anchor="middle">ВЫГОДНО</text>
-  <text x="351" y="150" fill="#eef3fb" font-size="16" font-weight="700">3 месяца</text>
-  <text x="351" y="196" fill="#eef3fb" font-size="30" font-weight="800">399 <tspan font-size="16" fill="#9aa7bd">₽</tspan></text>
-  <text x="351" y="218" fill="#65728a" font-size="11">133 ₽ / месяц</text>
-  <text x="351" y="252" fill="#cfe0ff" font-size="12">✓ Безлимитный трафик</text>
-  <text x="351" y="280" fill="#cfe0ff" font-size="12">✓ До 10 устройств</text>
-  <text x="351" y="308" fill="#cfe0ff" font-size="12">✓ Приоритетная поддержка</text>
-  <rect x="351" y="442" width="218" height="40" rx="11" fill="url(#acc2)"/>
-  <text x="460" y="467" fill="#06121f" font-size="13" font-weight="700" text-anchor="middle">Выбрать</text>
+  <!-- Card SOLO -->
+  <g>
+    <rect x="40" y="156" width="270" height="404" rx="22" fill="#111722" stroke="#1f2a3d"/>
+    <text x="66" y="196" fill="#eef3fb" font-size="17" font-weight="700">SOLO · 1</text>
+    <text x="66" y="216" fill="#65728a" font-size="11">1 устройство</text>
+    <text x="66" y="262" fill="#eef3fb" font-size="32" font-weight="800">129 <tspan font-size="17" fill="#9aa7bd">₽</tspan></text>
+    <text x="66" y="284" fill="#65728a" font-size="11">за 30 дн.</text>
+    <g fill="#9aa7bd" font-size="12">
+      <text x="84" y="324">Безлимитный трафик</text>
+      <text x="84" y="352">До 1 устройства</text>
+      <text x="84" y="380">Все локации</text>
+      <text x="84" y="408">Любая платформа</text>
+    </g>
+    <g stroke="#4d8bff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M66 320 l3 3 l6 -7"/><path d="M66 348 l3 3 l6 -7"/><path d="M66 376 l3 3 l6 -7"/><path d="M66 404 l3 3 l6 -7"/>
+    </g>
+    <rect x="66" y="494" width="218" height="42" rx="12" fill="#13233f" stroke="#4d8bff" stroke-opacity="0.4"/>
+    <text x="175" y="520" fill="#4d8bff" font-size="13" font-weight="600" text-anchor="middle">Выбрать</text>
+  </g>
 
-  <!-- Plan 3 -->
-  <rect x="614" y="110" width="266" height="380" rx="18" fill="#111722" stroke="#1f2a3d"/>
-  <text x="638" y="150" fill="#eef3fb" font-size="16" font-weight="700">1 год</text>
-  <text x="638" y="196" fill="#eef3fb" font-size="30" font-weight="800">1290 <tspan font-size="16" fill="#9aa7bd">₽</tspan></text>
-  <text x="638" y="218" fill="#65728a" font-size="11">107 ₽ / месяц</text>
-  <text x="638" y="252" fill="#9aa7bd" font-size="12">✓ Безлимитный трафик</text>
-  <text x="638" y="280" fill="#9aa7bd" font-size="12">✓ До 10 устройств</text>
-  <text x="638" y="308" fill="#9aa7bd" font-size="12">✓ Максимальная выгода</text>
-  <rect x="638" y="430" width="218" height="38" rx="11" fill="#1a2436"/>
-  <text x="747" y="454" fill="#9aa7bd" font-size="13" font-weight="600" text-anchor="middle">Выбрать</text>
+  <!-- Card HOME (popular) -->
+  <g>
+    <rect x="325" y="146" width="270" height="424" rx="22" fill="#13233f" stroke="#4d8bff" stroke-width="1.6"/>
+    <rect x="402" y="134" width="116" height="24" rx="12" fill="url(#mp)"/>
+    <text x="460" y="150" fill="#06121f" font-size="11" font-weight="700" text-anchor="middle">★ ХИТ</text>
+    <text x="351" y="190" fill="#eef3fb" font-size="17" font-weight="700">HOME · 3</text>
+    <text x="351" y="210" fill="#9aa7bd" font-size="11">самый популярный тариф</text>
+    <text x="351" y="258" fill="#eef3fb" font-size="32" font-weight="800">339 <tspan font-size="17" fill="#9aa7bd">₽</tspan></text>
+    <text x="351" y="280" fill="#65728a" font-size="11">за 30 дн.</text>
+    <g fill="#cfe0ff" font-size="12">
+      <text x="369" y="320">Безлимитный трафик</text>
+      <text x="369" y="348">До 3 устройств</text>
+      <text x="369" y="376">Все локации</text>
+      <text x="369" y="404">Любая платформа</text>
+    </g>
+    <g stroke="#2bd4ee" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M351 316 l3 3 l6 -7"/><path d="M351 344 l3 3 l6 -7"/><path d="M351 372 l3 3 l6 -7"/><path d="M351 400 l3 3 l6 -7"/>
+    </g>
+    <rect x="351" y="504" width="218" height="44" rx="12" fill="url(#mp)"/>
+    <text x="460" y="531" fill="#06121f" font-size="13" font-weight="700" text-anchor="middle">Выбрать</text>
+  </g>
+
+  <!-- Card UNLIMITED -->
+  <g>
+    <rect x="610" y="156" width="270" height="404" rx="22" fill="#111722" stroke="#1f2a3d"/>
+    <text x="636" y="196" fill="#eef3fb" font-size="17" font-weight="700">UNLIMITED</text>
+    <text x="636" y="216" fill="#65728a" font-size="11">максимум возможностей</text>
+    <text x="636" y="262" fill="#eef3fb" font-size="32" font-weight="800">799 <tspan font-size="17" fill="#9aa7bd">₽</tspan></text>
+    <text x="636" y="284" fill="#65728a" font-size="11">за 30 дн.</text>
+    <g fill="#9aa7bd" font-size="12">
+      <text x="654" y="324">Безлимитный трафик</text>
+      <text x="654" y="352">До 10 устройств</text>
+      <text x="654" y="380">Все локации</text>
+      <text x="654" y="408">Любая платформа</text>
+    </g>
+    <g stroke="#4d8bff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M636 320 l3 3 l6 -7"/><path d="M636 348 l3 3 l6 -7"/><path d="M636 376 l3 3 l6 -7"/><path d="M636 404 l3 3 l6 -7"/>
+    </g>
+    <rect x="636" y="494" width="218" height="42" rx="12" fill="#13233f" stroke="#4d8bff" stroke-opacity="0.4"/>
+    <text x="745" y="520" fill="#4d8bff" font-size="13" font-weight="600" text-anchor="middle">Выбрать</text>
+  </g>
 </svg>
