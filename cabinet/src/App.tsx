@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { BrandingProvider } from "@/contexts/BrandingContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute, PublicOnlyRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
@@ -23,6 +24,7 @@ import AdminGatewaysPage from "@/pages/admin/AdminGatewaysPage";
 import AdminAdLinksPage from "@/pages/admin/AdminAdLinksPage";
 import AdminBroadcastsPage from "@/pages/admin/AdminBroadcastsPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
+import AdminAppearancePage from "@/pages/admin/AdminAppearancePage";
 import AdminRemnaWavePage from "@/pages/admin/AdminRemnaWavePage";
 import AdminSupportPage from "@/pages/admin/AdminSupportPage";
 import SupportPage from "@/pages/SupportPage";
@@ -31,6 +33,7 @@ import HomePage from "@/pages/HomePage";
 export default function App() {
   return (
     <ThemeProvider>
+      <BrandingProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -198,6 +201,14 @@ export default function App() {
               }
             />
             <Route
+              path="/admin/appearance"
+              element={
+                <AdminRoute>
+                  <AdminAppearancePage />
+                </AdminRoute>
+              }
+            />
+            <Route
               path="/admin/remnawave"
               element={
                 <AdminRoute>
@@ -216,6 +227,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </BrandingProvider>
     </ThemeProvider>
   );
 }

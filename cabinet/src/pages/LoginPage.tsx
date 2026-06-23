@@ -9,6 +9,7 @@ import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { ApiError, type TelegramAuthRequest } from "@/types/api";
 import { getTelegramWebApp, whenTelegramReady } from "@/hooks/useTelegramWebApp";
+import { useBranding } from "@/contexts/BrandingContext";
 
 const TELEGRAM_BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "";
 
@@ -18,6 +19,7 @@ function getTelegramInitData(): string | null {
 
 export default function LoginPage() {
   const { login, loginWithTelegram, loginWithTelegramWebApp } = useAuth();
+  const { brandName } = useBranding();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -128,10 +130,7 @@ export default function LoginPage() {
             <ShieldCheck className="h-6 w-6" strokeWidth={2.2} />
           </div>
           <div className="flex items-baseline justify-center gap-1.5">
-            <span className="brand-wordmark text-2xl font-bold tracking-tight">Begemot</span>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-fg-subtle">
-              VPN
-            </span>
+            <span className="brand-wordmark text-2xl font-bold tracking-tight">{brandName}</span>
           </div>
           <p className="mt-2 text-sm text-fg-muted">
             Управляйте подпиской и устройствами

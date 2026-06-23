@@ -13,6 +13,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBranding } from "@/contexts/BrandingContext";
 import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 import { getTelegramWebApp } from "@/hooks/useTelegramWebApp";
 
@@ -27,6 +28,7 @@ const navItems = [
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, isAdmin, logout } = useAuth();
+  const { brandName } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -74,10 +76,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <ShieldCheck className="h-[23px] w-[23px]" strokeWidth={2.2} />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="brand-wordmark text-[20px] font-bold tracking-tight">Begemot</span>
-            <span className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-fg-subtle">
-              VPN
-            </span>
+            <span className="brand-wordmark text-[20px] font-bold tracking-tight">{brandName}</span>
           </div>
         </NavLink>
 
@@ -162,10 +161,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <ShieldCheck className="h-4 w-4" strokeWidth={2.2} />
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="brand-wordmark text-sm font-bold tracking-tight">Begemot</span>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
-              VPN
-            </span>
+            <span className="brand-wordmark text-sm font-bold tracking-tight">{brandName}</span>
           </div>
         </NavLink>
         <ThemeSwitcher />
