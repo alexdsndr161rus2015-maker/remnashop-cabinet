@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# RемнаShop (кабинет + админка) — установка-дополнение поверх готового бота.
+# RemnaShop (кабинет + админка) — установка-дополнение поверх готового бота.
 #
 #   ./install.sh
 #
-# Предполагается, что бот RемнаShop уже настроен и .env заполнен.
+# Предполагается, что бот RemnaShop уже настроен и .env заполнен.
 # Скрипт НЕ трогает существующие переменные — он только ДОПИСЫВАЕТ те, что
 # добавляет это дополнение (кабинет / web / email):
 #   • секреты (APP_API_KEY, APP_JWT_SECRET) генерирует сам;
@@ -27,7 +27,7 @@ ok()   { printf '%s✓%s %s\n' "$GRN" "$RST" "$*"; }
 warn() { printf '%s!%s %s\n' "$YLW" "$RST" "$*"; }
 die()  { printf '%s✗ %s%s\n' "$RED" "$*" "$RST" >&2; exit 1; }
 
-say "${BOLD}RемнаShop — установка кабинета и админки${RST}"
+say "${BOLD}RemnaShop — установка кабинета и админки${RST}"
 
 # ── зависимости ──────────────────────────────────────────────────────────────
 command -v docker  >/dev/null 2>&1 || die "Не найден docker: https://docs.docker.com/engine/install/"
@@ -40,7 +40,7 @@ ok "Зависимости на месте"
 # ── проверяем существующий .env бота ──────────────────────────────────────────
 if [ ! -f .env ]; then
   warn ".env не найден."
-  warn "Это дополнение ставится поверх уже настроенного бота RемнаShop."
+  warn "Это дополнение ставится поверх уже настроенного бота RemnaShop."
   warn "Сначала настройте бота (cp .env.example .env и заполните), затем запустите снова."
   die "Нет .env — нечего дополнять."
 fi
@@ -120,7 +120,7 @@ if need_value EMAIL_ENABLED; then
     ask EMAIL_BREVO_API_KEY "  Brevo API key (xkeysib-…), Enter — пропустить" "-"
     [ "${ASKED:-}" != "-" ] && ensure EMAIL_BREVO_API_KEY "${ASKED}"; ASKED=""
     ask EMAIL_FROM_EMAIL "  Адрес отправителя (From)"; [ -n "${ASKED:-}" ] && ensure EMAIL_FROM_EMAIL "$ASKED"; FROM="${ASKED:-}"; ASKED=""
-    ask EMAIL_FROM_NAME  "  Имя отправителя" "RемнаShop"; ensure EMAIL_FROM_NAME "$ASKED"; ASKED=""
+    ask EMAIL_FROM_NAME  "  Имя отправителя" "RemnaShop"; ensure EMAIL_FROM_NAME "$ASKED"; ASKED=""
     ask EMAIL_HOST "  SMTP host" "smtp.gmail.com"; ensure EMAIL_HOST "$ASKED"; ASKED=""
     ask EMAIL_PORT "  SMTP port" "587"; ensure EMAIL_PORT "$ASKED"; ASKED=""
     ask EMAIL_USERNAME "  SMTP логин" "${FROM}"; ensure EMAIL_USERNAME "$ASKED"; ASKED=""
@@ -139,13 +139,13 @@ ensure EMAIL_USE_SSL false
 ensure EMAIL_USERNAME ""
 ensure EMAIL_PASSWORD ""
 ensure EMAIL_FROM_EMAIL ""
-ensure EMAIL_FROM_NAME "RемнаShop"
+ensure EMAIL_FROM_NAME "RemnaShop"
 ensure EMAIL_BREVO_API_KEY ""
 
 # ── дописываем отсутствовавшие ключи одним блоком ─────────────────────────────
 if [ "${#ADD_LINES[@]}" -gt 0 ]; then
   {
-    printf '\n# ── Добавлено RемнаShop (кабинет/web/email) — %s ──\n' "$(date +%F)"
+    printf '\n# ── Добавлено RemnaShop (кабинет/web/email) — %s ──\n' "$(date +%F)"
     printf '%s\n' "${ADD_LINES[@]}"
   } >> .env
   ok "Добавлено новых строк в .env: ${#ADD_LINES[@]}"
