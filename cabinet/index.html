@@ -8,23 +8,11 @@
     <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
     <title>Begemot VPN</title>
     <meta name="description" content="Begemot VPN — личный кабинет: подписка, устройства и тарифы" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       (function () {
-        // Разворачиваем Mini App на весь экран сразу, до рендера React.
-        try {
-          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-            window.Telegram.WebApp.expand();
-            window.Telegram.WebApp.ready();
-            // Применяем тему Telegram (чтобы не было мигания при FOUC).
-            var tgScheme = window.Telegram.WebApp.colorScheme;
-            if (tgScheme) {
-              document.documentElement.classList.add("theme-" + tgScheme);
-              document.documentElement.style.colorScheme = tgScheme;
-              document.documentElement.dataset.themeMode = tgScheme;
-            }
-          } else {
-            // Обычный браузер — применяем сохранённую тему.
+        // Применяет тему из localStorage / системную. Используется в обычном браузере.
+        function applyStoredTheme() {
+          try {
             var stored = localStorage.getItem("cabinet-theme");
             var mode = stored || "system";
             var resolved = mode;
@@ -36,8 +24,61 @@
             document.documentElement.classList.add("theme-" + resolved);
             document.documentElement.style.colorScheme = resolved;
             document.documentElement.dataset.themeMode = mode;
+          } catch (e) {}
+        }
+
+        // Mini App запускается с параметрами tgWebApp* в hash URL. Только в этом
+        // случае нужен SDK Telegram. В обычном браузере НЕ грузим telegram.org —
+        // у части операторов он режется DPI и блокирует рендер всей страницы.
+        var isMiniApp =
+          /tgWebApp/i.test(window.location.hash) ||
+          !!window.TelegramWebviewProxy ||
+          (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+
+        if (!isMiniApp) {
+          applyStoredTheme();
+          return;
+        }
+
+        // Сообщаем приложению, что SDK Telegram ещё грузится, чтобы оно дождалось.
+        window.__tgWebAppExpected = true;
+        function settle() {
+          window.__tgWebAppSettled = true;
+          try {
+            window.dispatchEvent(new Event("tg-webapp-settled"));
+          } catch (e) {}
+        }
+
+        // Mini App: подгружаем SDK асинхронно, инициализируем по загрузке.
+        var s = document.createElement("script");
+        s.src = "https://telegram.org/js/telegram-web-app.js";
+        s.async = true;
+        s.onload = function () {
+          try {
+            var wa = window.Telegram && window.Telegram.WebApp;
+            if (wa) {
+              wa.expand();
+              wa.ready();
+              var tgScheme = wa.colorScheme;
+              if (tgScheme) {
+                document.documentElement.classList.add("theme-" + tgScheme);
+                document.documentElement.style.colorScheme = tgScheme;
+                document.documentElement.dataset.themeMode = tgScheme;
+              }
+            } else {
+              applyStoredTheme();
+            }
+          } catch (e) {
+            applyStoredTheme();
           }
-        } catch (e) {}
+          settle();
+        };
+        // Если SDK не загрузился (заблокирован) — не оставляем страницу без темы.
+        s.onerror = function () {
+          applyStoredTheme();
+          settle();
+        };
+        document.head.appendChild(s);
       })();
     </script>
   </head>

@@ -16,6 +16,7 @@ venv/
 node_modules/
 cabinet/dist/
 *.local
+*.tsbuildinfo
 
 # Build artifacts / archives
 *.tar.gz
