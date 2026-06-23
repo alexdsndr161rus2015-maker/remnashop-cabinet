@@ -9,7 +9,7 @@ import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { ApiError, type TelegramAuthRequest } from "@/types/api";
 import { getTelegramWebApp, whenTelegramReady } from "@/hooks/useTelegramWebApp";
-import { useBranding } from "@/contexts/BrandingContext";
+import { BrandWordmark } from "@/components/BrandWordmark";
 
 const TELEGRAM_BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "";
 
@@ -19,7 +19,6 @@ function getTelegramInitData(): string | null {
 
 export default function LoginPage() {
   const { login, loginWithTelegram, loginWithTelegramWebApp } = useAuth();
-  const { brandName } = useBranding();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -129,8 +128,8 @@ export default function LoginPage() {
           <div className="brand-mark mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl text-white">
             <ShieldCheck className="h-6 w-6" strokeWidth={2.2} />
           </div>
-          <div className="flex items-baseline justify-center gap-1.5">
-            <span className="brand-wordmark text-2xl font-bold tracking-tight">{brandName}</span>
+          <div className="flex items-baseline justify-center">
+            <BrandWordmark className="text-2xl" />
           </div>
           <p className="mt-2 text-sm text-fg-muted">
             Управляйте подпиской и устройствами
