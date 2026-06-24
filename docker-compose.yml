@@ -86,6 +86,11 @@ services:
     hostname: remnashop
     <<: [*build, *common, *logging, *env]
 
+    # overlay: примиряем осиротевший alembic_version (прошлые overlay-ревизии)
+    # ДО штатного docker-entrypoint.sh, который запускает `alembic upgrade head`.
+    # Шаг best-effort (см. src/overlay_bootstrap.py) — старт не блокирует.
+    command: ["sh", "-c", "python -m src.overlay_bootstrap; exec ./docker-entrypoint.sh"]
+
     environment:
       RESET_ASSETS: "${RESET_ASSETS:-false}"
 
