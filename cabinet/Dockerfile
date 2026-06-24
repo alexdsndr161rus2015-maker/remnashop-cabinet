@@ -24,9 +24,13 @@ COPY nginx.conf /etc/nginx/templates/default.conf.template
 # Подставляем ТОЛЬКО переменные с префиксом API_ — рантайм-переменные nginx
 # ($host, $remote_addr, $binary_remote_addr, $request_uri, …) остаются нетронутыми.
 ENV NGINX_ENVSUBST_FILTER=^API_
-# Дефолт для одно-серверной установки (бот в той же docker-сети). Переопределяется
-# через env API_UPSTREAM в compose (напр. на отдельном сервере — IP/host бота:5000).
+# Дефолты для одно-серверной установки (бот в той же docker-сети по http, Host=$host).
+# Переопределяются через env в compose / install.sh. Для сайта на отдельном сервере:
+#   API_UPSTREAM=bot.example.com:443  API_SCHEME=https  API_HOST_HEADER=bot.example.com
+# API_HOST_HEADER по умолчанию = литерал $host (\$ экранирует подстановку Docker'ом).
 ENV API_UPSTREAM=remnashop:5000
+ENV API_SCHEME=http
+ENV API_HOST_HEADER=\$host
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

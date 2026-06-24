@@ -116,15 +116,21 @@ if [ "$MODE" = "site" ]; then
   ask TELEGRAM_BOT_USERNAME "  Username бота без @ (для входа в кабинет)"
   [ -n "${ASKED:-}" ] && ensure TELEGRAM_BOT_USERNAME "$ASKED"; ASKED=""
 
-  # адрес API бота host:port — куда nginx кабинета проксирует /api/
+  # Домен API бота — кабинет проксирует /api/ на ПУБЛИЧНЫЙ API бота по https
+  # (его уже отдаёт reverse-proxy бота; WG/приватный канал не нужен).
+  # Из домена выводим API_UPSTREAM (домен:443), API_SCHEME=https, API_HOST_HEADER=домен.
   if need_value API_UPSTREAM; then
     while :; do
-      ask API_UPSTREAM "  Приватный адрес API бота host:port (напр. 10.8.0.1:5000)"
-      UP="${ASKED:-}"; ASKED=""
-      # без порта — подставим :5000
-      [[ "$UP" == *:* ]] || UP="$UP:5000"
-      if [[ "$UP" =~ ^[A-Za-z0-9._-]+:[0-9]+$ ]]; then ensure API_UPSTREAM "$UP"; break; fi
-      warn "Нужен формат host:port, напр. 10.8.0.1:5000"
+      ask API_BOT_DOMAIN "  Домен API бота, где отвечает /api/v1/* (напр. bot.example.com)"
+      D="${ASKED:-}"; ASKED=""
+      D="${D#http://}"; D="${D#https://}"; D="${D%%/*}"   # убираем схему и путь
+      if [[ "$D" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$D" == *.* ]]; then
+        ensure API_UPSTREAM "$D:443"
+        ensure API_SCHEME https
+        ensure API_HOST_HEADER "$D"
+        break
+      fi
+      warn "Нужен домен, напр. bot.example.com"
     done
   else
     ok "  API_UPSTREAM уже задан — пропускаю"
@@ -138,6 +144,7 @@ if [ "$MODE" = "site" ]; then
 
   CAB_URL="$(getval WEB_CABINET_URL)"
   UP="$(getval API_UPSTREAM)"
+  API_DOM="$(getval API_HOST_HEADER)"
 
   # ВАЖНО: при одном `-f cabinet/...` compose берёт project-directory по папке
   # этого файла (cabinet/) и ищет .env ТАМ, а не в корне репозитория, где мы его
@@ -145,20 +152,21 @@ if [ "$MODE" = "site" ]; then
   # (process-env у compose имеет высший приоритет — годится и для build-args).
   export TELEGRAM_BOT_USERNAME="$(getval TELEGRAM_BOT_USERNAME)"
   export API_UPSTREAM="$UP"
+  export API_SCHEME="$(getval API_SCHEME)"
+  export API_HOST_HEADER="$API_DOM"
 
-  # Пред-проверка связи с ботом — самая частая ошибка установки на отдельном
-  # сервере: не поднят WG/VPN-туннель или на боте не задан API_BIND_HOST.
-  UP_HOST="${UP%:*}"; UP_PORT="${UP##*:}"
-  if timeout 4 bash -c "exec 3<>/dev/tcp/${UP_HOST}/${UP_PORT}" 2>/dev/null; then
-    ok "  Связь с API бота ${UP} есть"
+  # Пред-проверка: отвечает ли публичный API бота (частая ошибка — неверный домен).
+  PRE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "https://${API_DOM}/api/v1/public/auth/me" 2>/dev/null || echo 000)"
+  if [ "$PRE" = "401" ] || [ "$PRE" = "200" ]; then
+    ok "  API бота https://${API_DOM} отвечает (${PRE})"
   else
-    warn "  ${UP} сейчас НЕдоступен."
-    warn "  Проверьте: поднят ли WG/VPN-туннель и задан ли на боте API_BIND_HOST=${UP_HOST}."
-    warn "  Кабинет соберу, но /api/ будет отдавать 502, пока канал не поднимется."
+    warn "  https://${API_DOM}/api/v1/public/auth/me вернул '${PRE}' (ожидался 401)."
+    warn "  Проверьте, что это верный домен API бота и он доступен по https."
+    warn "  Кабинет соберу, но /api/ может не работать, пока домен не отвечает."
   fi
 
   say ""
-  info "Собираю и поднимаю кабинет (проксирует /api/ → ${UP})…"
+  info "Собираю и поднимаю кабинет (проксирует /api/ → https://${API_DOM})…"
   $DC --env-file .env -f cabinet/docker-compose.site.yml up -d --build
 
   say ""
@@ -166,10 +174,7 @@ if [ "$MODE" = "site" ]; then
   say "  Кабинет: ${DIM}127.0.0.1:5002${RST}  → проксируйте на ${BOLD}${CAB_URL:-ваш домен кабинета}${RST}"
   say ""
   say "  Логи:   ${DIM}$DC -f cabinet/docker-compose.site.yml logs -f${RST}"
-  say "  ${YLW}Проверьте:${RST}"
-  say "   • на сервере БОТА в .env задан ${BOLD}API_BIND_HOST${RST}=приватный IP (тот, что в ${UP}) и бот перезапущен;"
-  say "   • приватный канал (WireGuard/VPN) между серверами поднят;"
-  say "   • reverse-proxy с TLS на домен кабинета → 127.0.0.1:5002."
+  say "  ${YLW}Дальше:${RST} reverse-proxy с TLS (свободный 443) на домен кабинета → 127.0.0.1:5002."
   exit 0
 fi
 
