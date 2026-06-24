@@ -139,9 +139,16 @@ if [ "$MODE" = "site" ]; then
   CAB_URL="$(getval WEB_CABINET_URL)"
   UP="$(getval API_UPSTREAM)"
 
+  # ВАЖНО: при одном `-f cabinet/...` compose берёт project-directory по папке
+  # этого файла (cabinet/) и ищет .env ТАМ, а не в корне репозитория, где мы его
+  # пишем. Поэтому передаём .env явно и экспортируем переменные в окружение
+  # (process-env у compose имеет высший приоритет — годится и для build-args).
+  export TELEGRAM_BOT_USERNAME="$(getval TELEGRAM_BOT_USERNAME)"
+  export API_UPSTREAM="$UP"
+
   say ""
   info "Собираю и поднимаю кабинет (проксирует /api/ → ${UP})…"
-  $DC -f cabinet/docker-compose.site.yml up -d --build
+  $DC --env-file .env -f cabinet/docker-compose.site.yml up -d --build
 
   say ""
   ok "${BOLD}Готово!${RST}"
