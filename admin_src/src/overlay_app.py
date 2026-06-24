@@ -1,42 +1,31 @@
-"""Overlay-точка входа.
+"""Overlay-обёртка над базовой точкой входа.
 
-Раньше overlay цеплял admin-роутер копией base `src/web/app.py`. Это хрупко:
-любое изменение base app.py (CORS, swagger, webhook, lifespan) затиралось нашей
-устаревшей копией → на новой версии base приложение могло не стартовать.
-
-Здесь base `get_app()` используется КАК ЕСТЬ (не копируется), а overlay только
-ДОБАВЛЯЕТ сверху:
+Раньше overlay копировал обвязку base (`src/__main__.py`) — при изменении этой
+обвязки в новой версии base мы бы не подхватили её автоматически. Здесь base
+`application()` вызывается КАК ЕСТЬ (не копируется), а overlay только ДОБАВЛЯЕТ:
   • admin-роутер (`/api/v1/admin/*`);
   • дополнительные public-ручки (`/api/v1/public/*`), которых нет в base;
-  • идемпотентное создание таблиц поддержки (вне alembic — см. ниже).
+  • идемпотентное создание таблиц поддержки в обёрнутом lifespan (вне alembic).
 
-Таблицы поддержки создаются в обёрнутом lifespan, а НЕ alembic-миграцией:
-overlay-миграция, вклинённая в линейную историю base, при каждом релизе base
-ловила конфликт ревизий (дубликат id / два head у `alembic upgrade head`).
-Создание `IF NOT EXISTS` при старте полностью развязывает overlay от истории
-alembic — обновления base больше не ломают старт. Примирение осиротевших
-`alembic_version` от прошлых overlay-ревизий делает `src/overlay_bootstrap.py`
-перед запуском alembic (команда сервиса в docker-compose).
+Точку входа uvicorn на этот модуль переключает sed-патч в корневом Dockerfile
+(`src.__main__:application` → `src.overlay_app:application`); если патч не
+сматчится на новом base — билд падает сразу (а не молча в рантайме).
+
+Развязка от alembic и примирение alembic_version — см. src/overlay_bootstrap.py.
 """
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-import uvicorn
 from dishka import AsyncContainer, Scope
-from dishka.integrations.aiogram import setup_dishka as setup_aiogram_dishka
-from dishka.integrations.fastapi import setup_dishka as setup_fastapi_dishka
 from fastapi import APIRouter, FastAPI
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.__main__ import application as _base_application
 from src.core.config import AppConfig
 from src.core.constants import API_V1
-from src.core.logger import setup_logger
-from src.infrastructure.di import create_aiogram_container
-from src.telegram.dispatcher import get_bg_manager_factory, get_dispatcher, setup_dispatcher
-from src.web.app import get_app
 
 # overlay-роутеры
 from src.web.endpoints.admin import router as admin_router
@@ -93,7 +82,7 @@ def _wrap_lifespan_with_support_tables(app: FastAPI, container: AsyncContainer) 
     """Оборачивает base lifespan: перед ним создаёт таблицы поддержки.
 
     base lifespan НЕ копируется — берём тот, что выставил `get_app`, и вызываем
-    его внутри. Контейнер dishka уже привязан (setup_fastapi_dishka выше).
+    его внутри. Контейнер dishka берём из app.state (его положил setup_dishka).
     """
     base_lifespan = app.router.lifespan_context
 
@@ -116,33 +105,15 @@ def _wrap_lifespan_with_support_tables(app: FastAPI, container: AsyncContainer) 
 
 
 def application() -> FastAPI:
-    config = AppConfig.get()
-    setup_logger(config)
-
-    dispatcher = get_dispatcher(config)
-    bg_manager_factory = get_bg_manager_factory(dispatcher)
-    setup_dispatcher(dispatcher)
-
-    app = get_app(config, dispatcher)
-    container = create_aiogram_container(config, bg_manager_factory)
-
-    setup_aiogram_dishka(container, dispatcher, auto_inject=True)
-    setup_fastapi_dishka(container, app)
+    # base-обвязка целиком (get_app + dishka + всё, что base добавит в будущем)
+    app = _base_application()
+    container: AsyncContainer = app.state.dishka_container
 
     # ── overlay: добавляем роуты поверх нетронутого base app ──
     app.include_router(admin_router)
-    if config.web_enabled:
+    if AppConfig.get().web_enabled:
         app.include_router(_overlay_public_router())
 
     _wrap_lifespan_with_support_tables(app, container)
 
     return app
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        app=application,
-        host="0.0.0.0",
-        port=8000,
-        factory=True,
-    )
