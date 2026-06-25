@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +20,11 @@ function getTelegramInitData(): string | null {
 export default function LoginPage() {
   const { login, loginWithTelegram, loginWithTelegramWebApp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Куда вернуть после входа (напр. /devices из кнопки «Подключиться» в боте).
+  // Только безопасные внутренние пути.
+  const rawNext = searchParams.get("next");
+  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +55,7 @@ export default function LoginPage() {
 
       setIsLoading(true);
       loginWithTelegramWebApp({ init_data: initData })
-        .then(() => navigate("/"))
+        .then(() => navigate(next))
         .catch((err) => {
           setError(
             err instanceof ApiError
@@ -64,7 +69,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [loginWithTelegramWebApp, navigate]);
+  }, [loginWithTelegramWebApp, navigate, next]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +77,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email, password });
-      navigate("/");
+      navigate(next);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : "Не удалось войти. Попробуйте снова.",
@@ -86,7 +91,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await loginWithTelegram(data);
-      navigate("/");
+      navigate(next);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : "Не удалось войти через Telegram.",

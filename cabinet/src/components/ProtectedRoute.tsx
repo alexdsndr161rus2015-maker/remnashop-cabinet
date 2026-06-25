@@ -1,7 +1,13 @@
 import { type ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+
+// Безопасный внутренний путь для редиректа после входа (защита от open-redirect).
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
 
 function FullScreenLoader() {
   return (
@@ -13,18 +19,28 @@ function FullScreenLoader() {
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) return <FullScreenLoader />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    // Сохраняем, куда вели (напр. /devices из кнопки «Подключиться»), чтобы после
+    // авто-входа в Mini App вернуть пользователя именно туда, а не на главную.
+    const next = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
 
   return <AppLayout>{children}</AppLayout>;
 }
 
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) return <FullScreenLoader />;
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    const params = new URLSearchParams(location.search);
+    return <Navigate to={safeNext(params.get("next"))} replace />;
+  }
 
   return <>{children}</>;
 }
