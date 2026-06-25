@@ -1,13 +1,91 @@
-import { useState } from "react";
-import { HelpCircle, FileText, Shield, ScrollText, Star } from "lucide-react";
+import { useEffect, useState } from "react";
+import { HelpCircle, FileText, Shield, ScrollText, Star, Activity } from "lucide-react";
+import { subscriptionApi } from "@/api/subscription";
 
 const tabs = [
   { id: "faq", label: "FAQ", icon: HelpCircle },
+  { id: "service", label: "Серверы", icon: Activity },
   { id: "rules", label: "Правила", icon: FileText },
   { id: "privacy", label: "Конфиденциальность", icon: Shield },
   { id: "offer", label: "Оферта", icon: ScrollText },
   { id: "statuses", label: "Статусы", icon: Star },
 ] as const;
+
+// Эмодзи-флаг страны из ISO-кода (две буквы → regional indicators).
+function flagEmoji(code: string): string {
+  if (!code || code.length !== 2) return "🌐";
+  const base = 0x1f1e6;
+  return String.fromCodePoint(
+    ...[...code.toUpperCase()].map((c) => base + c.charCodeAt(0) - 65),
+  );
+}
+
+function ServiceStatus() {
+  const [nodes, setNodes] = useState<
+    { name: string; country_code: string; online: boolean; users_online: number }[]
+  >([]);
+  const [allOk, setAllOk] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    subscriptionApi
+      .serviceStatus()
+      .then((s) => {
+        setNodes(s.nodes);
+        setAllOk(s.all_operational);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  if (!loaded) {
+    return <p className="py-6 text-center text-sm text-fg-subtle">Загрузка статуса…</p>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div
+        className={`flex items-center gap-3 rounded-2xl border px-5 py-4 ${
+          allOk
+            ? "border-success/20 bg-success/10 text-success"
+            : "border-warning/20 bg-warning/10 text-warning"
+        }`}
+      >
+        <span className={`h-2.5 w-2.5 rounded-full ${allOk ? "bg-success" : "bg-warning"}`} />
+        <p className="text-sm font-semibold">
+          {allOk ? "Все серверы работают" : "Часть серверов недоступны"}
+        </p>
+      </div>
+
+      {nodes.length === 0 ? (
+        <p className="py-4 text-center text-sm text-fg-subtle">Нет данных о серверах</p>
+      ) : (
+        <div className="space-y-2">
+          {nodes.map((n, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 rounded-2xl border border-border-subtle bg-bg-subtle px-5 py-3.5"
+            >
+              <span className="text-xl">{flagEmoji(n.country_code)}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{n.name}</span>
+              {n.online && (
+                <span className="text-xs text-fg-subtle">{n.users_online} онлайн</span>
+              )}
+              <span
+                className={`flex items-center gap-1.5 text-xs font-medium ${
+                  n.online ? "text-success" : "text-danger"
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full ${n.online ? "bg-success" : "bg-danger"}`} />
+                {n.online ? "Работает" : "Недоступен"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -40,6 +118,14 @@ function Faq() {
     {
       q: "Как пополнить баланс?",
       a: "В разделе «Тарифы» доступны различные способы оплаты: банковская карта, Telegram Stars и криптовалюта. Выберите удобный и следуйте инструкциям.",
+    },
+    {
+      q: "Подключение нестабильно или режется по DPI — что делать?",
+      a: "Попробуйте сменить протокол/сервер в приложении (например, Reality обходит большинство блокировок). Если домен кабинета не открывается у вашего оператора — зайдите с включённым VPN. Актуальный статус серверов — на вкладке «Серверы».",
+    },
+    {
+      q: "Скорость низкая — как ускорить?",
+      a: "Выберите в приложении сервер поближе или менее загруженный (загрузку видно в кабинете на главной). Перезапустите приложение и подключение. Если проблема сохраняется — напишите в поддержку.",
     },
     {
       q: "Если что-то не работает — куда писать?",
@@ -314,6 +400,7 @@ function Statuses() {
 
 const CONTENT: Record<TabId, React.ReactNode> = {
   faq: <Faq />,
+  service: <ServiceStatus />,
   rules: <Rules />,
   privacy: <Privacy />,
   offer: <Offer />,

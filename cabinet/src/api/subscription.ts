@@ -24,6 +24,12 @@ export const subscriptionApi = {
       "/subscription/traffic-history",
     ),
 
+  serviceStatus: () =>
+    api.get<{
+      nodes: { name: string; country_code: string; online: boolean; users_online: number }[];
+      all_operational: boolean;
+    }>("/subscription/service-status"),
+
   devices: () => api.get<DevicesResponse>("/subscription/devices"),
 
   deleteDevice: (hwid: string) =>
