@@ -66,12 +66,14 @@ cabinet_connect_buttons = (
         when=F["web_enabled"] & F["is_mini_app"] & F["connectable"],
         style=Style(ButtonStyle.PRIMARY),
     ),
-    # web ВКЛ + резерв: открыть кабинет /devices в браузере
+    # web ВКЛ + резерв: открыть кабинет /devices в браузере (без Mini App).
+    # Показываем всегда рядом с Mini App-кнопкой — на случай, если Mini App
+    # не открывается (старый клиент, блокировки), чтобы был прямой переход.
     Url(
         text=I18nFormat("btn-menu.connect-reserve"),
         url=Format("{web_cabinet_url}/devices"),
         id="connect_cabinet_reserve",
-        when=F["web_enabled"] & F["is_mini_app_reserve"] & F["connectable"],
+        when=F["web_enabled"] & F["is_mini_app"] & F["connectable"],
     ),
     # web ВКЛ, не Mini App: кабинет /devices в браузере (основная)
     Url(
