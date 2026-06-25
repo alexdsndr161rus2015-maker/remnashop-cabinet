@@ -8,7 +8,7 @@ from magic_filter import F
 from src.application.common.policy import Permission
 from src.core.constants import INLINE_QUERY_INVITE, PAYMENT_PREFIX
 from src.core.enums import BannerName
-from src.telegram.keyboards import build_buttons_row, connect_buttons
+from src.telegram.keyboards import build_buttons_row
 from src.telegram.routers.dashboard.handlers import on_smart_search
 from src.telegram.states import Dashboard, MainMenu, Subscription
 from src.telegram.utils import require_permission
@@ -53,10 +53,61 @@ custom_buttons = (
     build_buttons_row(3, text_on_click=on_text_button_click),
 )
 
+# Кнопки «Подключиться». Если включён наш web-кабинет (web_enabled) — ведём в
+# кабинет на раздел устройств ({web_cabinet_url}/devices), а НЕ на стандартную
+# саб-страницу Remnawave. Если web выключен — прежнее поведение (саб Remnawave).
+# Заменяет базовый connect_buttons из src.telegram.keyboards.
+cabinet_connect_buttons = (
+    # web ВКЛ: Mini App → кабинет /devices
+    WebApp(
+        text=I18nFormat("btn-menu.connect"),
+        url=Format("{web_cabinet_url}/devices"),
+        id="connect_cabinet_miniapp",
+        when=F["web_enabled"] & F["is_mini_app"] & F["connectable"],
+        style=Style(ButtonStyle.PRIMARY),
+    ),
+    # web ВКЛ + резерв: открыть кабинет /devices в браузере
+    Url(
+        text=I18nFormat("btn-menu.connect-reserve"),
+        url=Format("{web_cabinet_url}/devices"),
+        id="connect_cabinet_reserve",
+        when=F["web_enabled"] & F["is_mini_app_reserve"] & F["connectable"],
+    ),
+    # web ВКЛ, не Mini App: кабинет /devices в браузере (основная)
+    Url(
+        text=I18nFormat("btn-menu.connect"),
+        url=Format("{web_cabinet_url}/devices"),
+        id="connect_cabinet_url",
+        when=F["web_enabled"] & ~F["is_mini_app"] & F["connectable"],
+        style=Style(ButtonStyle.PRIMARY),
+    ),
+    # web ВЫКЛ: прежнее поведение — стандартный саб Remnawave
+    WebApp(
+        text=I18nFormat("btn-menu.connect"),
+        url=Format("{connection_url}"),
+        id="connect_miniapp",
+        when=~F["web_enabled"] & F["is_mini_app"] & F["connectable"],
+        style=Style(ButtonStyle.PRIMARY),
+    ),
+    Url(
+        text=I18nFormat("btn-menu.connect-reserve"),
+        url=Format("{subscription_url}"),
+        id="connect_reserve",
+        when=~F["web_enabled"] & F["is_mini_app_reserve"] & F["connectable"],
+    ),
+    Url(
+        text=I18nFormat("btn-menu.connect"),
+        url=Format("{connection_url}"),
+        id="connect_sub_page",
+        when=~F["web_enabled"] & ~F["is_mini_app"] & F["connectable"],
+        style=Style(ButtonStyle.PRIMARY),
+    ),
+)
+
 menu = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-main-menu"),
-    *connect_buttons,
+    *cabinet_connect_buttons,
     Row(
         Button(
             text=I18nFormat("btn-menu.connect-not-available"),
