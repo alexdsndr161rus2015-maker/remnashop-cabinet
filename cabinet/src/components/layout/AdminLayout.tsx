@@ -193,22 +193,22 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-6xl animate-fade-in">{children}</div>
       </main>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t border-[var(--border)] bg-bg/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md md:hidden">
-        {navItems.slice(0, 5).map(({ to, icon: Icon, label, end }) => (
+      {/* Mobile bottom nav — горизонтальная прокрутка по всем разделам */}
+      <nav className="scrollbar-hide fixed inset-x-0 bottom-0 z-20 flex items-center gap-0.5 overflow-x-auto border-t border-[var(--border)] bg-bg/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md md:hidden">
+        {navItems.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
               clsx(
-                "flex flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors",
+                "flex min-w-[60px] shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium transition-colors",
                 isActive ? "text-accent" : "text-fg-subtle",
               )
             }
           >
             <Icon className="h-5 w-5" strokeWidth={1.75} />
-            {label}
+            <span className="max-w-[64px] truncate">{label}</span>
           </NavLink>
         ))}
       </nav>
