@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { AlertCircle, KeyRound } from "lucide-react";
-import { gatewaysAdminApi, type AdminGateway } from "@/api/admin";
+import { AlertCircle, KeyRound, X, Settings2 } from "lucide-react";
+import { gatewaysAdminApi, type AdminGateway, type GatewayField } from "@/api/admin";
 import { ApiError } from "@/types/api";
 
 const GATEWAY_NAMES: Record<string, string> = {
@@ -24,11 +24,145 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   RUB: "₽", USD: "$", EUR: "€", XTR: "⭐",
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  shop_id: "Shop ID",
+  api_key: "API-ключ",
+  secret_key: "Секретный ключ",
+  merchant_id: "Merchant ID",
+  wallet_id: "Wallet ID",
+  customer: "Customer",
+  vat_code: "Код НДС",
+  payment_method: "Метод оплаты (id)",
+  payment_system_id: "ID платёжной системы",
+  secret_word_2: "Секретное слово 2",
+  customer_email: "Email покупателя",
+  customer_ip: "IP покупателя",
+  merchant_login: "Merchant Login",
+  password1: "Пароль 1",
+  password2: "Пароль 2",
+};
+
+function fieldLabel(name: string): string {
+  return FIELD_LABELS[name] || name;
+}
+
+// ─── Модалка настройки ключей шлюза ──────────────────────────────────────────
+function ConfigModal({
+  gateway,
+  onClose,
+  onSaved,
+}: {
+  gateway: AdminGateway;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [fields, setFields] = useState<GatewayField[]>([]);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    gatewaysAdminApi
+      .fields(gateway.id)
+      .then((r) => setFields(r.fields))
+      .catch((e) => setErr(e instanceof ApiError ? e.detail : "Ошибка"))
+      .finally(() => setLoading(false));
+  }, [gateway.id]);
+
+  const save = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      // Сохраняем только поля, которые админ реально ввёл.
+      for (const [name, val] of Object.entries(values)) {
+        if (val.trim() === "") continue;
+        await gatewaysAdminApi.setField(gateway.id, name, val.trim());
+      }
+      onSaved();
+      onClose();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.detail : "Не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const name = gateway.display_name || GATEWAY_NAMES[gateway.type] || gateway.type;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 animate-fade-in" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--border)] bg-bg p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-fg">Ключи: {name}</h2>
+          <button onClick={onClose} aria-label="Закрыть" className="text-fg-subtle hover:text-fg">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-accent" />
+          </div>
+        ) : fields.length === 0 ? (
+          <p className="py-6 text-center text-sm text-fg-muted">
+            Этот шлюз не требует ключей.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {fields.map((f) => (
+              <label key={f.name} className="block">
+                <span className="mb-1 block text-xs font-medium text-fg-muted">
+                  {fieldLabel(f.name)}
+                  {f.secret && <span className="text-fg-subtle"> 🔒</span>}
+                </span>
+                <input
+                  type={f.secret ? "password" : "text"}
+                  autoComplete="off"
+                  value={values[f.name] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  placeholder={f.is_set ? "•••••••• (задано)" : "не задано"}
+                  className="w-full rounded-xl border border-[var(--border)] bg-bg-subtle px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                />
+              </label>
+            ))}
+            <p className="text-xs text-fg-subtle">
+              Пустые поля не меняются. Значения сохраняются в боте.
+            </p>
+          </div>
+        )}
+
+        {err && <p className="mt-3 text-sm text-danger">{err}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="h-9 rounded-xl border border-[var(--border)] px-4 text-sm font-medium text-fg-muted hover:text-fg"
+          >
+            Отмена
+          </button>
+          {fields.length > 0 && (
+            <button
+              onClick={save}
+              disabled={saving}
+              className="btn-gradient inline-flex h-9 items-center rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
+            >
+              {saving ? "Сохраняю…" : "Сохранить"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminGatewaysPage() {
   const [gateways, setGateways] = useState<AdminGateway[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [configuring, setConfiguring] = useState<AdminGateway | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -42,7 +176,7 @@ export default function AdminGatewaysPage() {
 
   const toggle = async (g: AdminGateway) => {
     if (!g.is_configured && !g.is_active) {
-      alert("Шлюз не настроен. Укажите учётные данные в конфигурации бота.");
+      setConfiguring(g); // не настроен — открываем настройку вместо включения
       return;
     }
     setToggling(g.id);
@@ -63,7 +197,7 @@ export default function AdminGatewaysPage() {
       </div>
 
       <div className="rounded-2xl border border-border-subtle bg-accent/5 px-5 py-4 text-sm text-fg-muted">
-        💡 Для настройки ключей API редактируйте файл <code className="rounded bg-bg-raised px-1">.env</code> на сервере и перезапустите контейнер.
+        💡 Нажмите «Настроить» на шлюзе, чтобы ввести ключи API — они сохранятся в боте.
       </div>
 
       {error && <div className="flex items-center gap-2 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger"><AlertCircle className="h-4 w-4" />{error}</div>}
@@ -106,13 +240,25 @@ export default function AdminGatewaysPage() {
                   </button>
                 </div>
 
-                {!g.is_configured && (
-                  <p className="mt-3 text-xs text-warning">⚠ Требуется настройка ключей</p>
-                )}
+                <button
+                  onClick={() => setConfiguring(g)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent transition-opacity hover:opacity-80"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  Настроить ключи
+                </button>
               </div>
             );
           })}
         </div>
+      )}
+
+      {configuring && (
+        <ConfigModal
+          gateway={configuring}
+          onClose={() => setConfiguring(null)}
+          onSaved={load}
+        />
       )}
     </div>
   );

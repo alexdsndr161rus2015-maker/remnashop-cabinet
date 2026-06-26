@@ -1,5 +1,6 @@
-from typing import Any
+from typing import Any, get_type_hints
 
+from adaptix import Retort
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, status
@@ -11,6 +12,28 @@ from src.application.common.dao import PaymentGatewayDao
 from ._common import AdminUser
 
 router = APIRouter(prefix="/gateways", tags=["Admin - Gateways"])
+
+# Поля настроек, не относящиеся к учётным данным (их через форму ключей не правим).
+_NON_CRED_FIELDS = {"display_name"}
+
+
+def _gateway_fields(g: Any) -> list[dict[str, Any]]:
+    """Список полей-ключей шлюза: имя, секрет ли, заполнено ли (без значений)."""
+    st = getattr(g, "settings", None)
+    if st is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for name, typ in get_type_hints(type(st)).items():
+        if name in _NON_CRED_FIELDS:
+            continue
+        out.append(
+            {
+                "name": name,
+                "secret": "SecretStr" in str(typ),
+                "is_set": getattr(st, name, None) is not None,
+            }
+        )
+    return out
 
 
 def _gateway_to_dict(g: Any) -> dict[str, Any]:
@@ -64,3 +87,56 @@ async def toggle_gateway(
     await gateway_dao.set_active_status(gateway.type, body.is_active)
     await session.commit()
     return {"id": gateway_id, "is_active": body.is_active}
+
+
+@router.get("/{gateway_id}/fields")
+@inject
+async def gateway_fields(
+    gateway_id: int,
+    _admin: AdminUser,
+    gateway_dao: FromDishka[PaymentGatewayDao],
+) -> dict[str, Any]:
+    gateway = await gateway_dao.get_by_id(gateway_id)
+    if not gateway:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gateway not found")
+    return {"fields": _gateway_fields(gateway)}
+
+
+class SetFieldRequest(BaseModel):
+    value: str  # пустая строка → очистить поле
+
+
+@router.put("/{gateway_id}/fields/{field_name}")
+@inject
+async def set_gateway_field(
+    gateway_id: int,
+    field_name: str,
+    body: SetFieldRequest,
+    _admin: AdminUser,
+    gateway_dao: FromDishka[PaymentGatewayDao],
+    retort: FromDishka[Retort],
+    session: FromDishka[AsyncSession],
+) -> dict[str, Any]:
+    gateway = await gateway_dao.get_by_id(gateway_id)
+    if not gateway or not gateway.settings:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gateway not configured")
+
+    hints = get_type_hints(type(gateway.settings))
+    if field_name in _NON_CRED_FIELDS or field_name not in hints:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown field")
+
+    value = body.value.strip()
+    if value == "":
+        new_value = None  # очистка поля
+    else:
+        try:
+            # Грузим строку в тип поля так же, как штатный use-case бота.
+            new_value = retort.load(value, hints[field_name])
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid value")
+
+    setattr(gateway.settings, field_name, new_value)
+    await gateway_dao.update(gateway)
+    await session.commit()
+
+    return {"ok": True, "is_configured": bool(getattr(gateway.settings, "is_configured", False))}
