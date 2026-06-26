@@ -299,10 +299,23 @@ export interface AdminGateway {
   display_name: string | null;
 }
 
+export interface GatewayField {
+  name: string;
+  secret: boolean;
+  is_set: boolean;
+}
+
 export const gatewaysAdminApi = {
   list: () => adminApi.get<{ items: AdminGateway[]; total: number }>("/gateways"),
   toggle: (id: number, is_active: boolean) =>
     adminApi.put<{ id: number; is_active: boolean }>(`/gateways/${id}/toggle`, { is_active }),
+  fields: (id: number) =>
+    adminApi.get<{ fields: GatewayField[] }>(`/gateways/${id}/fields`),
+  setField: (id: number, field: string, value: string) =>
+    adminApi.put<{ ok: boolean; is_configured: boolean }>(
+      `/gateways/${id}/fields/${encodeURIComponent(field)}`,
+      { value },
+    ),
 };
 
 // ---------- Ad Links ----------
