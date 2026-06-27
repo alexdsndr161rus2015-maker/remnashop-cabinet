@@ -110,6 +110,52 @@ ask_yn() { local input; read -r -p "$(printf '%s%s%s [y/N]: ' "$BOLD" "$1" "$RST
 
 gen_hex() { openssl rand -hex "${1:-32}" | tr -d '\n'; }
 
+# ── авто-публикация кабинета через Caddy панели Remnawave ──────────────────────
+# Стандартная раскладка Remnawave: Caddy-контейнер с именем `caddy` на сети
+# remnawave-network и конфигом /opt/remnawave/caddy/Caddyfile. Если он есть —
+# дописываем туда vhost кабинета и перезагружаем Caddy. Это «всё автоматом»:
+# второй Caddy не нужен, TLS на 443 уже работает у панели (нестандартный порт
+# не подходит — на нём Caddy не выпустит сертификат и сломается вход Telegram).
+# Возвращает 0, если кабинет опубликован через Caddy панели; иначе 1.
+PANEL_CADDYFILE="/opt/remnawave/caddy/Caddyfile"
+CABINET_CONTAINER="remnashop-cabinet"
+wire_cabinet_into_panel_caddy() {
+  local dom="$1" esc
+  [ -n "$dom" ] || return 1
+  [ -f "$PANEL_CADDYFILE" ] || return 1
+  docker ps --format '{{.Names}}' | grep -qx caddy || return 1
+
+  # Caddy должен видеть кабинет по имени контейнера — подключаем к сети при нужде
+  docker network inspect remnawave-network --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null \
+    | grep -qw caddy || docker network connect remnawave-network caddy 2>/dev/null || true
+
+  esc="${dom//./\\.}"
+  if grep -qE "[/[:space:]]${esc}[[:space:]]*\{" "$PANEL_CADDYFILE"; then
+    ok "  Домен ${dom} уже есть в Caddyfile панели — оставляю как есть"
+  else
+    cp "$PANEL_CADDYFILE" "$PANEL_CADDYFILE.bak.$(date +%Y%m%d-%H%M%S)"
+    cat >> "$PANEL_CADDYFILE" <<EOF
+
+# RemnaShop cabinet — добавлено install.sh
+https://${dom} {
+	reverse_proxy * http://${CABINET_CONTAINER}:80
+}
+EOF
+    docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
+      || docker restart caddy >/dev/null 2>&1 || true
+    ok "  Кабинет ${dom} вписан в Caddyfile панели (рядом бэкап) и Caddy перезагружен"
+  fi
+
+  # Системный Caddy (если кто-то ставил site-install) гасим — он дерётся за 443
+  if systemctl list-unit-files 2>/dev/null | grep -q '^caddy\.service'; then
+    if systemctl is-active caddy >/dev/null 2>&1 || systemctl is-enabled caddy >/dev/null 2>&1; then
+      systemctl disable --now caddy >/dev/null 2>&1 || true
+      warn "  Системный Caddy отключён, чтобы не конфликтовал с Caddy панели на 443"
+    fi
+  fi
+  return 0
+}
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Режим SITE — только кабинет на отдельном сервере                         ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -288,10 +334,21 @@ if [ "$WITH_CABINET" = yes ]; then
   say ""
   ok "${BOLD}Готово!${RST}"
   say "  Бот и API:  ${DIM}127.0.0.1:5000${RST}"
-  say "  Кабинет:    ${DIM}127.0.0.1:5002${RST}  → проксируйте на ${BOLD}${CAB_URL:-ваш домен кабинета}${RST}"
+  say "  Кабинет:    ${DIM}127.0.0.1:5002${RST}"
+  say ""
+
+  # Пытаемся опубликовать кабинет автоматически через Caddy панели Remnawave.
+  CAB_DOM="${CAB_URL#http://}"; CAB_DOM="${CAB_DOM#https://}"; CAB_DOM="${CAB_DOM%%/*}"
+  if wire_cabinet_into_panel_caddy "$CAB_DOM"; then
+    say "  ${GRN}Кабинет опубликован автоматически:${RST} ${BOLD}https://${CAB_DOM}${RST}"
+    say "  ${DIM}(проверьте A-запись ${CAB_DOM} → IP этого сервера)${RST}"
+  else
+    say "  ${YLW}Дальше:${RST} опубликуйте кабинет через ваш reverse-proxy с TLS:"
+    say "    ${DIM}${CAB_DOM:-cabinet.example.com} { reverse_proxy 127.0.0.1:5002 }${RST}"
+    say "  (Caddy панели Remnawave не найден — настройте прокси вручную.)"
+  fi
   say ""
   say "  Логи:   ${DIM}$DC -f docker-compose.yml -f cabinet/docker-compose.cabinet.yml logs -f${RST}"
-  say "  ${YLW}Дальше:${RST} reverse-proxy с TLS на порты 5000 (API/вебхуки) и 5002 (кабинет)."
 else
   info "Собираю и поднимаю бота (overlay) и воркеры — БЕЗ локального кабинета…"
   $DC -f docker-compose.yml up -d --build
