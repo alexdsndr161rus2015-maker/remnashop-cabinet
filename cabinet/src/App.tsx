@@ -27,6 +27,7 @@ import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 import AdminAppearancePage from "@/pages/admin/AdminAppearancePage";
 import AdminRemnaWavePage from "@/pages/admin/AdminRemnaWavePage";
 import AdminSupportPage from "@/pages/admin/AdminSupportPage";
+import AdminAuditPage from "@/pages/admin/AdminAuditPage";
 import SupportPage from "@/pages/SupportPage";
 import HomePage from "@/pages/HomePage";
 
@@ -205,6 +206,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <AdminAppearancePage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/audit"
+              element={
+                <AdminRoute>
+                  <AdminAuditPage />
                 </AdminRoute>
               }
             />
