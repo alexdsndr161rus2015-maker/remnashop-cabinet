@@ -18,10 +18,10 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from dishka import AsyncContainer, Scope
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from loguru import logger
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.__main__ import application as _base_application
 from src.core.config import AppConfig
@@ -61,6 +61,17 @@ _SUPPORT_TABLES_DDL = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_support_messages_ticket_id ON support_messages (ticket_id)",
+    """
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id          SERIAL PRIMARY KEY,
+        actor       VARCHAR(120) NOT NULL,
+        method      VARCHAR(10)  NOT NULL,
+        path        VARCHAR(300) NOT NULL,
+        status      INTEGER      NOT NULL,
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_admin_audit_created ON admin_audit_log (created_at DESC)",
 )
 
 
@@ -119,5 +130,48 @@ def application() -> FastAPI:
         app.include_router(_overlay_public_router())
 
     _wrap_lifespan_with_support_tables(app, container)
+    _add_admin_audit_middleware(app, container)
 
     return app
+
+
+_AUDIT_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_ADMIN_PREFIX = API_V1 + "/admin/"
+
+
+def _add_admin_audit_middleware(app: FastAPI, container: AsyncContainer) -> None:
+    """Логирует успешные изменяющие админ-запросы в admin_audit_log.
+
+    «Кто» берётся из request.state.audit_actor (его выставляет admin-зависимость).
+    Сессия — из app-scoped sessionmaker. Ошибки логирования не влияют на ответ.
+    """
+
+    @app.middleware("http")
+    async def _audit(request: Request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        try:
+            if (
+                request.method in _AUDIT_METHODS
+                and request.url.path.startswith(_ADMIN_PREFIX)
+                and response.status_code < 400
+            ):
+                actor = getattr(request.state, "audit_actor", None)
+                if actor:
+                    sm = await container.get(async_sessionmaker[AsyncSession])
+                    async with sm() as s:
+                        await s.execute(
+                            text(
+                                "INSERT INTO admin_audit_log (actor, method, path, status) "
+                                "VALUES (:a, :m, :p, :st)"
+                            ),
+                            {
+                                "a": str(actor)[:120],
+                                "m": request.method,
+                                "p": request.url.path[:300],
+                                "st": response.status_code,
+                            },
+                        )
+                        await s.commit()
+        except Exception:  # noqa: BLE001 — аудит не должен ронять запрос
+            logger.debug("audit log write skipped")
+        return response

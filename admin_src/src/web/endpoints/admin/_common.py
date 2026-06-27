@@ -39,6 +39,11 @@ async def _get_admin_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
     if user.role < Role.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    # Кто действует — для аудит-лога (читается мидлварью после ответа).
+    request.state.audit_actor = (
+        f"@{user.username}" if getattr(user, "username", None)
+        else getattr(user, "email", None) or f"id:{user.id}"
+    )
     return user
 
 

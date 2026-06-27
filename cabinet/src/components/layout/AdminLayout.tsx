@@ -16,6 +16,7 @@ import {
   Waves,
   LifeBuoy,
   Palette,
+  ShieldAlert,
   Menu,
   X,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const navItems = [
   { to: "/admin/remnawave", icon: Waves, label: "RemnaWave" },
   { to: "/admin/support", icon: LifeBuoy, label: "Поддержка" },
   { to: "/admin/appearance", icon: Palette, label: "Оформление" },
+  { to: "/admin/audit", icon: ShieldAlert, label: "Аудит" },
   { to: "/admin/settings", icon: Settings, label: "Настройки" },
 ];
 

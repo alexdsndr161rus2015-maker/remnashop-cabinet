@@ -390,3 +390,19 @@ export const subscriptionsAdminApi = {
       `/subscriptions/user/${userId}/points`, { points }
     ),
 };
+
+// ---------- Audit ----------
+
+export interface AuditEntry {
+  id: number;
+  actor: string;
+  method: string;
+  path: string;
+  status: number;
+  created_at: string | null;
+}
+
+export const auditAdminApi = {
+  list: (limit = 100) =>
+    adminApi.get<{ items: AuditEntry[] }>(`/audit?limit=${limit}`),
+};
