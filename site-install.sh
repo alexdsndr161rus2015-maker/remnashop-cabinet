@@ -81,12 +81,26 @@ CAB_DOM="${CAB_URL#http://}"; CAB_DOM="${CAB_DOM#https://}"; CAB_DOM="${CAB_DOM%
 # Блок, который пользователь добавит в СВОЙ reverse-proxy, если Caddy не ставим.
 proxy_hint() {
   say ""
-  say "  ${BOLD}Кабинет поднят на 127.0.0.1:5002 (без TLS).${RST}"
-  say "  Добавьте в ВАШ reverse-proxy блок для домена кабинета, например (Caddy):"
+  say "  ${BOLD}Кабинет поднят на 127.0.0.1:5002 (без TLS).${RST} Опубликуйте его СВОИМ прокси —"
+  say "  возьмите блок под то, что у вас стоит:"
+  say ""
+  say "  ${BOLD}Caddy${RST} (сертификат выпустит сам):"
   say "    ${DIM}${CAB_DOM} {${RST}"
   say "    ${DIM}    reverse_proxy 127.0.0.1:5002${RST}"
   say "    ${DIM}}${RST}"
-  say "  …или эквивалент в nginx (proxy_pass http://127.0.0.1:5002;)."
+  say ""
+  say "  ${BOLD}nginx${RST} (сертификат — через certbot):"
+  say "    ${DIM}server {${RST}"
+  say "    ${DIM}    listen 443 ssl;  server_name ${CAB_DOM};${RST}"
+  say "    ${DIM}    ssl_certificate     /etc/letsencrypt/live/${CAB_DOM}/fullchain.pem;${RST}"
+  say "    ${DIM}    ssl_certificate_key /etc/letsencrypt/live/${CAB_DOM}/privkey.pem;${RST}"
+  say "    ${DIM}    location / {${RST}"
+  say "    ${DIM}        proxy_pass http://127.0.0.1:5002;${RST}"
+  say "    ${DIM}        proxy_set_header Host \$host;${RST}"
+  say "    ${DIM}        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;${RST}"
+  say "    ${DIM}        proxy_set_header X-Forwarded-Proto \$scheme;${RST}"
+  say "    ${DIM}    }${RST}"
+  say "    ${DIM}}${RST}"
 }
 
 # БЕЗ вопросов — решаем сами по факту занятости 443:

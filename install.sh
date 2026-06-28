@@ -110,6 +110,26 @@ ask_yn() { local input; read -r -p "$(printf '%s%s%s [y/N]: ' "$BOLD" "$1" "$RST
 
 gen_hex() { openssl rand -hex "${1:-32}" | tr -d '\n'; }
 
+# Готовые блоки для своего reverse-proxy (когда авто-публикация невозможна).
+# Печатаем И Caddy, И nginx — не у всех Caddy.
+print_proxy_blocks() {
+  local dom="${1:-cabinet.example.com}"
+  say "  ${BOLD}Caddy${RST} (сертификат выпустит сам):"
+  say "    ${DIM}${dom} { reverse_proxy 127.0.0.1:5002 }${RST}"
+  say "  ${BOLD}nginx${RST} (сертификат — через certbot):"
+  say "    ${DIM}server {${RST}"
+  say "    ${DIM}    listen 443 ssl;  server_name ${dom};${RST}"
+  say "    ${DIM}    ssl_certificate     /etc/letsencrypt/live/${dom}/fullchain.pem;${RST}"
+  say "    ${DIM}    ssl_certificate_key /etc/letsencrypt/live/${dom}/privkey.pem;${RST}"
+  say "    ${DIM}    location / {${RST}"
+  say "    ${DIM}        proxy_pass http://127.0.0.1:5002;${RST}"
+  say "    ${DIM}        proxy_set_header Host \$host;${RST}"
+  say "    ${DIM}        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;${RST}"
+  say "    ${DIM}        proxy_set_header X-Forwarded-Proto \$scheme;${RST}"
+  say "    ${DIM}    }${RST}"
+  say "    ${DIM}}${RST}"
+}
+
 # ── авто-публикация кабинета через Caddy панели Remnawave ──────────────────────
 # Стандартная раскладка Remnawave: Caddy-контейнер с именем `caddy` на сети
 # remnawave-network и конфигом /opt/remnawave/caddy/Caddyfile. Если он есть —
@@ -343,9 +363,9 @@ if [ "$WITH_CABINET" = yes ]; then
     say "  ${GRN}Кабинет опубликован автоматически:${RST} ${BOLD}https://${CAB_DOM}${RST}"
     say "  ${DIM}(проверьте A-запись ${CAB_DOM} → IP этого сервера)${RST}"
   else
-    say "  ${YLW}Дальше:${RST} опубликуйте кабинет через ваш reverse-proxy с TLS:"
-    say "    ${DIM}${CAB_DOM:-cabinet.example.com} { reverse_proxy 127.0.0.1:5002 }${RST}"
-    say "  (Caddy панели Remnawave не найден — настройте прокси вручную.)"
+    say "  ${YLW}Дальше:${RST} Caddy панели Remnawave не найден — опубликуйте кабинет"
+    say "  своим reverse-proxy с TLS (возьмите блок под то, что у вас стоит):"
+    print_proxy_blocks "${CAB_DOM:-cabinet.example.com}"
   fi
   say ""
   say "  ${YLW}Не забудьте (для входа через Telegram в браузере):${RST}"
