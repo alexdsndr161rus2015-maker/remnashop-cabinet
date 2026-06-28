@@ -349,7 +349,9 @@ if [ "$WITH_CABINET" = yes ]; then
   fi
   say ""
   say "  ${YLW}Не забудьте (для входа через Telegram в браузере):${RST}"
-  say "    @BotFather → /setdomain → ваш бот → ${BOLD}${CAB_DOM:-домен кабинета}${RST} (без https://)"
+  say "    привяжите домен кабинета к боту в @BotFather:"
+  say "      • новые боты: Bot Settings → Web Login → Allowed URLs → ${BOLD}${CAB_URL:-https://домен}${RST}"
+  say "      • старые боты: /setdomain → ${BOLD}${CAB_DOM:-домен}${RST} (без https://)"
   say ""
   say "  Логи:   ${DIM}$DC -f docker-compose.yml -f cabinet/docker-compose.cabinet.yml logs -f${RST}"
 else
