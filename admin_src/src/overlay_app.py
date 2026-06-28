@@ -30,6 +30,7 @@ from src.core.constants import API_V1
 # overlay-роутеры
 from src.web.endpoints.admin import router as admin_router
 from src.web.endpoints.public.appearance import router as appearance_router
+from src.web.endpoints.public.apps import router as apps_router
 from src.web.endpoints.public.auth_oidc import router as auth_oidc_router
 from src.web.endpoints.public.balance import router as balance_router
 from src.web.endpoints.public.email_manage import router as email_manage_router
@@ -92,6 +93,7 @@ def _overlay_public_router() -> APIRouter:
     router.include_router(traffic_history_router)
     router.include_router(service_status_router)
     router.include_router(appearance_router)
+    router.include_router(apps_router)
     router.include_router(auth_oidc_router)
     router.include_router(email_manage_router)
     return router

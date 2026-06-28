@@ -1,82 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Zap, Check, Star, QrCode, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-
-type Platform = "ios" | "android" | "windows" | "macos" | "androidtv";
-
-interface AppEntry {
-  id: string;
-  name: string;
-  desc: string;
-  recommended?: boolean;
-  platforms: Platform[];
-  /** Строит deep-link импорта подписки в приложение. */
-  deepLink: (sub: string) => string;
-  /** Ссылка установки на каждую платформу. */
-  install: Partial<Record<Platform, string>>;
-}
-
-const PLATFORMS: { id: Platform; label: string }[] = [
-  { id: "ios", label: "iPhone / iPad" },
-  { id: "android", label: "Android" },
-  { id: "windows", label: "Windows" },
-  { id: "macos", label: "macOS" },
-  { id: "androidtv", label: "Android TV" },
-];
-
-const APPS: AppEntry[] = [
-  {
-    id: "happ",
-    name: "Happ",
-    desc: "Простое и быстрое — рекомендуем для большинства",
-    recommended: true,
-    platforms: ["ios", "android", "macos", "windows", "androidtv"],
-    deepLink: (sub) => `happ://add/${sub}`,
-    install: {
-      ios: "https://apps.apple.com/app/id6504287215",
-      android: "https://play.google.com/store/apps/details?id=com.happproxy",
-      macos: "https://apps.apple.com/app/id6504287215",
-      windows: "https://github.com/Happ-proxy/happ-desktop/releases/latest",
-      androidtv: "https://github.com/Happ-proxy/happ-android/releases/latest",
-    },
-  },
-  {
-    id: "v2raytun",
-    name: "v2RayTun",
-    desc: "Популярный кросс-платформенный клиент",
-    platforms: ["ios", "android", "windows", "androidtv"],
-    deepLink: (sub) => `v2raytun://import/${sub}`,
-    install: {
-      ios: "https://apps.apple.com/app/id6476628951",
-      android: "https://play.google.com/store/apps/details?id=com.v2raytun.android",
-      windows: "https://v2raytun.com",
-      androidtv: "https://play.google.com/store/apps/details?id=com.v2raytun.android",
-    },
-  },
-  {
-    id: "streisand",
-    name: "Streisand",
-    desc: "Лёгкий клиент для Apple",
-    platforms: ["ios", "macos"],
-    deepLink: (sub) => `streisand://import/${sub}`,
-    install: {
-      ios: "https://apps.apple.com/app/id6450534064",
-      macos: "https://apps.apple.com/app/id6450534064",
-    },
-  },
-  {
-    id: "hiddify",
-    name: "Hiddify",
-    desc: "Открытый клиент для всех платформ",
-    platforms: ["android", "windows", "macos"],
-    deepLink: (sub) => `hiddify://import/${sub}`,
-    install: {
-      android: "https://play.google.com/store/apps/details?id=app.hiddify.com",
-      windows: "https://github.com/hiddify/hiddify-app/releases/latest",
-      macos: "https://github.com/hiddify/hiddify-app/releases/latest",
-    },
-  },
-];
+import { APPS, PLATFORMS, DEFAULT_PRIORITY, type AppEntry, type Platform } from "@/data/apps";
+import { appsApi, type AppsConfig } from "@/api/apps";
 
 function detectPlatform(): Platform {
   const ua = (navigator.userAgent || "").toLowerCase();
@@ -87,7 +13,17 @@ function detectPlatform(): Platform {
   return "windows";
 }
 
-function AppCard({ app, platform, sub }: { app: AppEntry; platform: Platform; sub: string }) {
+function AppCard({
+  app,
+  platform,
+  sub,
+  recommended,
+}: {
+  app: AppEntry;
+  platform: Platform;
+  sub: string;
+  recommended?: boolean;
+}) {
   const [connected, setConnected] = useState(false);
   const installUrl = app.install[platform];
 
@@ -102,7 +38,7 @@ function AppCard({ app, platform, sub }: { app: AppEntry; platform: Platform; su
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-fg">{app.name}</span>
-          {app.recommended && (
+          {recommended && (
             <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-subtle px-2 py-0.5 text-[10px] font-medium text-accent">
               <Star className="h-3 w-3" />
               Рекомендуем
@@ -138,8 +74,33 @@ function AppCard({ app, platform, sub }: { app: AppEntry; platform: Platform; su
 export function ConnectGuide({ subUrl }: { subUrl: string }) {
   const [platform, setPlatform] = useState<Platform>(detectPlatform);
   const [showQr, setShowQr] = useState(false);
+  // Выбор админа: какие приложения показывать и какое приоритетное.
+  const [config, setConfig] = useState<AppsConfig | null>(null);
 
-  const apps = useMemo(() => APPS.filter((a) => a.platforms.includes(platform)), [platform]);
+  useEffect(() => {
+    appsApi
+      .get()
+      .then(setConfig)
+      .catch(() => setConfig(null)); // при ошибке — показываем все (дефолт)
+  }, []);
+
+  const priority = config?.priority || DEFAULT_PRIORITY;
+
+  const apps = useMemo(() => {
+    // 1) только приложения под выбранную платформу
+    let list = APPS.filter((a) => a.platforms.includes(platform));
+    // 2) если админ ограничил список — оставляем только включённые
+    if (config?.enabled) {
+      const allow = new Set(config.enabled);
+      list = list.filter((a) => allow.has(a.id));
+    }
+    // 3) приоритетное приложение — первым
+    return [...list].sort((a, b) => {
+      if (a.id === priority) return -1;
+      if (b.id === priority) return 1;
+      return 0;
+    });
+  }, [platform, config, priority]);
 
   return (
     <div className="surface p-5">
@@ -170,7 +131,13 @@ export function ConnectGuide({ subUrl }: { subUrl: string }) {
       {/* Приложения */}
       <div className="mt-4 flex flex-col gap-2.5">
         {apps.map((app) => (
-          <AppCard key={app.id} app={app} platform={platform} sub={subUrl} />
+          <AppCard
+            key={app.id}
+            app={app}
+            platform={platform}
+            sub={subUrl}
+            recommended={app.id === priority}
+          />
         ))}
         {apps.length === 0 && (
           <p className="py-4 text-center text-sm text-fg-subtle">

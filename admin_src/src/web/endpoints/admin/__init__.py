@@ -4,6 +4,7 @@ from src.core.constants import API_V1
 
 from .ad_links import router as ad_links_router
 from .appearance import router as appearance_router
+from .apps import router as apps_router
 from .audit import router as audit_router
 from .broadcasts import router as broadcasts_router
 from .gateways import router as gateways_router
@@ -31,6 +32,7 @@ router.include_router(ad_links_router)
 router.include_router(remnawave_router)
 router.include_router(support_router)
 router.include_router(appearance_router)
+router.include_router(apps_router)
 router.include_router(audit_router)
 
 __all__ = ["router"]
