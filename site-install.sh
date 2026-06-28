@@ -89,40 +89,28 @@ proxy_hint() {
   say "  …или эквивалент в nginx (proxy_pass http://127.0.0.1:5002;)."
 }
 
-# Решение: ставить ли свой Caddy.
-#   USE_CADDY=yes|no  — можно задать заранее (неинтерактивно).
-#   Иначе: если 443 занят (свой прокси/панель) — НЕ трогаем; если свободен — спросим.
+# БЕЗ вопросов — решаем сами по факту занятости 443:
+#   • 443 свободен  → ставим Caddy и выпускаем сертификат автоматически;
+#   • 443 занят     → значит у вас уже есть свой reverse-proxy (Caddy панели и т.п.),
+#                     не трогаем его и просто показываем готовый блок для вставки.
+# (USE_CADDY=yes|no можно задать заранее, если очень нужно переопределить.)
 say ""
 DECISION="${USE_CADDY:-}"
 if [ -z "$DECISION" ]; then
-  if ss -ltn 2>/dev/null | grep -q ':443 '; then
-    warn "Порт 443 уже занят — похоже, у вас свой reverse-proxy (nginx / Caddy-панели)."
-    warn "Свой Caddy НЕ ставлю, чтобы не сломать ваш 443 (и webhook'и панели)."
-    DECISION="no"
-  elif [ -e /dev/tty ]; then
-    printf '%sПоставить Caddy и автоматически выпустить TLS на 443? [Y/n]: %s' "$BOLD" "$RST"
-    read -r _ans </dev/tty || _ans=""
-    case "${_ans:-y}" in [Nn]*) DECISION="no";; *) DECISION="yes";; esac
-  else
-    DECISION="yes"   # чистый сервер, неинтерактивно — ставим
-  fi
+  if ss -ltn 2>/dev/null | grep -q ':443 '; then DECISION="no"; else DECISION="yes"; fi
 fi
 
-if [ "$DECISION" = "yes" ]; then
-  if ss -ltn 2>/dev/null | grep -q ':443 '; then
-    warn "443 занят — пропускаю настройку Caddy, чтобы не конфликтовать."
-    proxy_hint
-  else
-    install_caddy
-    cat > /etc/caddy/Caddyfile <<EOF
+if [ "$DECISION" = "yes" ] && ! ss -ltn 2>/dev/null | grep -q ':443 '; then
+  install_caddy
+  cat > /etc/caddy/Caddyfile <<EOF
 ${CAB_DOM} {
     reverse_proxy 127.0.0.1:5002
 }
 EOF
-    systemctl restart caddy
-    ok "Caddy: ${CAB_DOM} → 127.0.0.1:5002 (TLS авто-сертификат)"
-  fi
+  systemctl restart caddy
+  ok "443 свободен → Caddy настроен сам: ${CAB_DOM} → 127.0.0.1:5002 (TLS авто)"
 else
+  warn "443 уже занят — у вас есть свой reverse-proxy. Caddy не трогаю."
   proxy_hint
 fi
 
