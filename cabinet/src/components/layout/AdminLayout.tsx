@@ -17,6 +17,7 @@ import {
   LifeBuoy,
   Palette,
   ShieldAlert,
+  Smartphone,
   Menu,
   X,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const navItems = [
   { to: "/admin/broadcasts", icon: Radio, label: "Рассылки" },
   { to: "/admin/remnawave", icon: Waves, label: "RemnaWave" },
   { to: "/admin/support", icon: LifeBuoy, label: "Поддержка" },
+  { to: "/admin/apps", icon: Smartphone, label: "Приложения" },
   { to: "/admin/appearance", icon: Palette, label: "Оформление" },
   { to: "/admin/audit", icon: ShieldAlert, label: "Аудит" },
   { to: "/admin/settings", icon: Settings, label: "Настройки" },

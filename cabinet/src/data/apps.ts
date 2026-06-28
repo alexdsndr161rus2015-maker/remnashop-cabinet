@@ -1,0 +1,149 @@
+// Каталог клиентских приложений для подключения подписки.
+// Какие из них показывать и какое «приоритетное» — выбирает админ
+// (см. AdminAppsPage + бэкенд /apps). Здесь — полный справочник с deep-link'ами.
+//
+// Примечание: схемы импорта у приложений отличаются и иногда меняются между
+// версиями. Если какой-то deep-link перестал работать — поправьте здесь. Для
+// query-стиля ссылку подписки кодируем (encodeURIComponent), для Shadowrocket —
+// base64. Во всех карточках также есть кнопка «Установить» и общий QR.
+
+export type Platform = "ios" | "android" | "windows" | "macos" | "androidtv";
+
+export interface AppEntry {
+  id: string;
+  name: string;
+  desc: string;
+  platforms: Platform[];
+  /** Строит deep-link импорта подписки в приложение. */
+  deepLink: (sub: string) => string;
+  /** Ссылка установки на каждую платформу. */
+  install: Partial<Record<Platform, string>>;
+}
+
+export const PLATFORMS: { id: Platform; label: string }[] = [
+  { id: "ios", label: "iPhone / iPad" },
+  { id: "android", label: "Android" },
+  { id: "windows", label: "Windows" },
+  { id: "macos", label: "macOS" },
+  { id: "androidtv", label: "Android TV" },
+];
+
+const enc = (sub: string) => encodeURIComponent(sub);
+const b64 = (sub: string) =>
+  typeof btoa === "function" ? btoa(sub) : sub; // Shadowrocket sub://base64
+
+/** id приоритетного приложения по умолчанию (если админ не выбрал своё). */
+export const DEFAULT_PRIORITY = "happ";
+
+export const APPS: AppEntry[] = [
+  {
+    id: "happ",
+    name: "Happ",
+    desc: "Простое и быстрое — подходит большинству",
+    platforms: ["ios", "android", "macos", "windows", "androidtv"],
+    deepLink: (sub) => `happ://add/${sub}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6504287215",
+      android: "https://play.google.com/store/apps/details?id=com.happproxy",
+      macos: "https://apps.apple.com/app/id6504287215",
+      windows: "https://github.com/Happ-proxy/happ-desktop/releases/latest",
+      androidtv: "https://github.com/Happ-proxy/happ-android/releases/latest",
+    },
+  },
+  {
+    id: "v2raytun",
+    name: "v2RayTun",
+    desc: "Популярный кросс-платформенный клиент",
+    platforms: ["ios", "android", "windows", "androidtv"],
+    deepLink: (sub) => `v2raytun://import/${sub}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6476628951",
+      android: "https://play.google.com/store/apps/details?id=com.v2raytun.android",
+      windows: "https://v2raytun.com",
+      androidtv: "https://play.google.com/store/apps/details?id=com.v2raytun.android",
+    },
+  },
+  {
+    id: "v2rayng",
+    name: "v2rayNG",
+    desc: "Классический клиент для Android",
+    platforms: ["android", "androidtv"],
+    deepLink: (sub) => `v2rayng://install-sub?url=${enc(sub)}`,
+    install: {
+      android: "https://play.google.com/store/apps/details?id=com.v2ray.ang",
+      androidtv: "https://github.com/2dust/v2rayNG/releases/latest",
+    },
+  },
+  {
+    id: "hiddify",
+    name: "Hiddify",
+    desc: "Открытый клиент для всех платформ",
+    platforms: ["ios", "android", "windows", "macos", "androidtv"],
+    deepLink: (sub) => `hiddify://import/${sub}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6596777532",
+      android: "https://play.google.com/store/apps/details?id=app.hiddify.com",
+      windows: "https://github.com/hiddify/hiddify-app/releases/latest",
+      macos: "https://github.com/hiddify/hiddify-app/releases/latest",
+      androidtv: "https://github.com/hiddify/hiddify-app/releases/latest",
+    },
+  },
+  {
+    id: "streisand",
+    name: "Streisand",
+    desc: "Лёгкий клиент для Apple",
+    platforms: ["ios", "macos"],
+    deepLink: (sub) => `streisand://import/${sub}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6450534064",
+      macos: "https://apps.apple.com/app/id6450534064",
+    },
+  },
+  {
+    id: "shadowrocket",
+    name: "Shadowrocket",
+    desc: "Мощный клиент для iOS (платный)",
+    platforms: ["ios", "macos"],
+    deepLink: (sub) => `sub://${b64(sub)}`,
+    install: {
+      ios: "https://apps.apple.com/app/id932747118",
+      macos: "https://apps.apple.com/app/id932747118",
+    },
+  },
+  {
+    id: "karing",
+    name: "Karing",
+    desc: "Кросс-платформенный клиент на базе sing-box",
+    platforms: ["ios", "android", "windows", "macos", "androidtv"],
+    deepLink: (sub) => `karing://install-config?url=${enc(sub)}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6472431552",
+      android: "https://github.com/KaringX/karing/releases/latest",
+      windows: "https://github.com/KaringX/karing/releases/latest",
+      macos: "https://github.com/KaringX/karing/releases/latest",
+      androidtv: "https://github.com/KaringX/karing/releases/latest",
+    },
+  },
+  {
+    id: "nekobox",
+    name: "NekoBox",
+    desc: "Гибкий клиент для Android (sing-box)",
+    platforms: ["android"],
+    deepLink: (sub) => `sing-box://import-remote-profile?url=${enc(sub)}`,
+    install: {
+      android: "https://github.com/MatsuriDayo/NekoBoxForAndroid/releases/latest",
+    },
+  },
+  {
+    id: "clash",
+    name: "Clash Meta",
+    desc: "Clash Verge / FlClash для ПК и Android",
+    platforms: ["windows", "macos", "android"],
+    deepLink: (sub) => `clash://install-config?url=${enc(sub)}`,
+    install: {
+      windows: "https://github.com/clash-verge-rev/clash-verge-rev/releases/latest",
+      macos: "https://github.com/clash-verge-rev/clash-verge-rev/releases/latest",
+      android: "https://github.com/chen08209/FlClash/releases/latest",
+    },
+  },
+];
