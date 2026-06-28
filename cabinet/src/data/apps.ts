@@ -51,6 +51,18 @@ export const APPS: AppEntry[] = [
     },
   },
   {
+    id: "incy",
+    name: "INCY",
+    desc: "Xray-клиент для iPhone, Mac и Android",
+    platforms: ["ios", "macos", "android"],
+    deepLink: (sub) => `incy://import/${sub}`,
+    install: {
+      ios: "https://apps.apple.com/app/id6756943388",
+      macos: "https://apps.apple.com/app/id6756943388",
+      android: "https://play.google.com/store/apps/details?id=llc.itdev.incy",
+    },
+  },
+  {
     id: "v2raytun",
     name: "v2RayTun",
     desc: "Популярный кросс-платформенный клиент",
