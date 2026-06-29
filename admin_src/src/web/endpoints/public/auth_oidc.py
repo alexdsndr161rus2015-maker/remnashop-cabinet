@@ -225,7 +225,7 @@ async def oidc_callback(
         if nonce and claims.get("nonce") not in (None, nonce):
             raise ValueError("nonce mismatch")
 
-        tg_id = int(claims["sub"])
+        tg_id = int(claims.get("id") or claims["sub"])
     except Exception:
         # Любой сбой обмена/проверки → мягко возвращаем на экран входа.
         return RedirectResponse(f"{login_url}?error=telegram", status_code=302)
