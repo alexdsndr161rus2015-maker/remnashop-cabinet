@@ -414,6 +414,7 @@ function ManageEmailBlock() {
 function ChangePasswordBlock() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     null,
@@ -421,6 +422,10 @@ function ChangePasswordBlock() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "Новый пароль и его повтор не совпадают" });
+      return;
+    }
     setIsLoading(true);
     setMessage(null);
     try {
@@ -431,6 +436,7 @@ function ChangePasswordBlock() {
       setMessage({ type: "success", text: "Пароль изменён" });
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmPassword("");
     } catch (e) {
       setMessage({
         type: "error",
@@ -461,6 +467,15 @@ function ChangePasswordBlock() {
           required
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <Input
+          type="password"
+          label="Повторите новый пароль"
+          autoComplete="new-password"
+          minLength={8}
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
         />
         {message && (
           <p
@@ -544,8 +559,8 @@ function TelegramLinkBlock() {
   return (
     <Card variant="bordered">
       <CardHeader title="Привязать Telegram" subtitle="Для быстрого входа и уведомлений" />
-      {/* Оба способа, если доступны: новый OIDC (без «deprecated») + классический
-          виджет как запасной. Включение OIDC не убирает старую привязку. */}
+      {/* Если включён OIDC — только его кнопка. Классический виджет остаётся
+          запасным лишь когда OIDC выключен (иначе «Bot domain invalid»). */}
       <div className="flex flex-col items-start gap-2.5">
         {telegramOidcEnabled && (
           // Новый флоу Telegram (OpenID Connect): привязка к текущему аккаунту.
@@ -562,7 +577,7 @@ function TelegramLinkBlock() {
             Привязать через Telegram
           </button>
         )}
-        {TELEGRAM_BOT_USERNAME && (
+        {!telegramOidcEnabled && TELEGRAM_BOT_USERNAME && (
           <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} onAuth={handleLink} />
         )}
       </div>
@@ -580,7 +595,7 @@ function TelegramLinkBlock() {
 }
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, hasPassword, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -636,7 +651,9 @@ export default function SettingsPage() {
         <ThemeSwitcher />
       </Card>
 
-      {user?.auth_type?.toUpperCase() === "EMAIL" && <ChangePasswordBlock />}
+      {/* Смена пароля — всем, у кого пароль уже есть (в т.ч. Telegram-юзерам с
+          резервным доступом), а не только email-аккаунтам. */}
+      {hasPassword && <ChangePasswordBlock />}
       {user?.auth_type?.toUpperCase() === "EMAIL" && <TelegramLinkBlock />}
 
       {/* Выход — для смены аккаунта (особенно на мобильном, где нет сайдбара) */}

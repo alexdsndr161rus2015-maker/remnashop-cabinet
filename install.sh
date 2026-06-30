@@ -110,24 +110,47 @@ ask_yn() { local input; read -r -p "$(printf '%s%s%s [y/N]: ' "$BOLD" "$1" "$RST
 
 gen_hex() { openssl rand -hex "${1:-32}" | tr -d '\n'; }
 
-# Готовые блоки для своего reverse-proxy (когда авто-публикация невозможна).
-# Печатаем И Caddy, И nginx — не у всех Caddy.
-print_proxy_blocks() {
-  local dom="${1:-cabinet.example.com}"
-  say "  ${BOLD}Caddy${RST} (сертификат выпустит сам):"
-  say "    ${DIM}${dom} { reverse_proxy 127.0.0.1:5002 }${RST}"
-  say "  ${BOLD}nginx${RST} (сертификат — через certbot):"
-  say "    ${DIM}server {${RST}"
-  say "    ${DIM}    listen 443 ssl;  server_name ${dom};${RST}"
-  say "    ${DIM}    ssl_certificate     /etc/letsencrypt/live/${dom}/fullchain.pem;${RST}"
-  say "    ${DIM}    ssl_certificate_key /etc/letsencrypt/live/${dom}/privkey.pem;${RST}"
-  say "    ${DIM}    location / {${RST}"
-  say "    ${DIM}        proxy_pass http://127.0.0.1:5002;${RST}"
-  say "    ${DIM}        proxy_set_header Host \$host;${RST}"
-  say "    ${DIM}        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;${RST}"
-  say "    ${DIM}        proxy_set_header X-Forwarded-Proto \$scheme;${RST}"
-  say "    ${DIM}    }${RST}"
-  say "    ${DIM}}${RST}"
+# ── выбор способа входа в кабинет ─────────────────────────────────────────────
+# Сначала предлагаем современный Telegram OIDC. Если согласились — классический
+# Login Widget НЕ спрашиваем (кабинет всё равно скрывает его при включённом OIDC,
+# а сам виджет без /setdomain выдаёт «Bot domain invalid»). Если от OIDC отказались —
+# предлагаем классический виджет. Если и от него отказ — остаётся вход ТОЛЬКО по
+# email (он доступен всегда). Идемпотентно: если что-то уже задано в .env — молчим.
+#   $1 — публичный URL кабинета (для подсказок Redirect URI / setdomain)
+#   $2 — "site", если это сайт-сервер (там секреты OIDC не хранятся — их держит бот)
+prompt_login_method() {
+  local cab_url="${1:-}" site="${2:-}" bot_id
+  if ! need_value TELEGRAM_OIDC_CLIENT_ID; then ok "  Telegram OIDC уже настроен — пропускаю выбор входа"; return; fi
+  if ! need_value TELEGRAM_BOT_USERNAME;  then ok "  Классический Telegram-вход уже задан — пропускаю"; return; fi
+  say ""
+  say "${BOLD}Вход в кабинет${RST} ${DIM}(вход по email доступен всегда)${RST}"
+  if [ "$site" = site ]; then
+    # На сайт-сервере OIDC настраивается на стороне БОТА (там работает auth_oidc).
+    # Здесь решаем лишь, вшивать ли классический Login Widget в бандл кабинета.
+    if ask_yn "Вход будет через Telegram OIDC (он настраивается на сервере бота)?"; then
+      ok "Классический Login Widget вшивать не буду — кабинет покажет кнопку OIDC."
+      return
+    fi
+  else
+    bot_id="$(getval BOT_TOKEN)"; bot_id="${bot_id%%:*}"
+    if ask_yn "Настроить вход через Telegram OIDC (новый флоу, рекомендуется)?"; then
+      info "Client ID и Secret берутся в @BotFather → Login Widget."
+      [ -n "$cab_url" ] && info "Redirect URI там же: ${cab_url%/}/api/auth/telegram/oidc/callback"
+      ask TELEGRAM_OIDC_CLIENT_ID "  Client ID (id бота)" "${bot_id:-}"
+      [ -n "${ASKED:-}" ] && ensure TELEGRAM_OIDC_CLIENT_ID "$ASKED"; ASKED=""
+      ask TELEGRAM_OIDC_CLIENT_SECRET "  Client Secret"
+      [ -n "${ASKED:-}" ] && ensure TELEGRAM_OIDC_CLIENT_SECRET "$ASKED"; ASKED=""
+      ok "Telegram OIDC настроен — классический Login Widget пропускаю."
+      return
+    fi
+  fi
+  if ask_yn "Настроить классический вход через Telegram (Login Widget)?"; then
+    ask TELEGRAM_BOT_USERNAME "  Username бота без @"
+    [ -n "${ASKED:-}" ] && ensure TELEGRAM_BOT_USERNAME "$ASKED"; ASKED=""
+    [ -n "$cab_url" ] && warn "Не забудьте: @BotFather → /setdomain → ${cab_url#https://} (без https://)"
+  else
+    warn "Вход через Telegram пропущен — остаётся только вход по email."
+  fi
 }
 
 # ── авто-публикация кабинета через Caddy панели Remnawave ──────────────────────
@@ -176,6 +199,116 @@ EOF
   return 0
 }
 
+# ── публикация кабинета своим reverse-proxy (Caddy/nginx) ──────────────────────
+# Принцип: если Caddy или nginx УЖЕ установлен — только ДОПИСЫВАЕМ в него vhost
+# кабинета (не ставим второй прокси, не перезаписываем чужой конфиг). Если ни
+# одного нет и 443 свободен — ставим выбранный и выпускаем сертификат сами.
+# Цель — контейнер кабинета на 127.0.0.1:5002.
+_install_caddy_pkg() {
+  command -v caddy >/dev/null 2>&1 && return 0
+  info "  Устанавливаю Caddy…"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https gnupg >/dev/null 2>&1 || true
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>/dev/null
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+    > /etc/apt/sources.list.d/caddy-stable.list 2>/dev/null
+  apt-get update -qq && apt-get install -y -qq caddy >/dev/null
+}
+
+# Дописать vhost кабинета в СУЩЕСТВУЮЩИЙ Caddyfile (не перезаписывая его). Идемпотентно.
+_caddy_add_vhost() {
+  local dom="$1" cfg="/etc/caddy/Caddyfile" esc
+  [ -f "$cfg" ] || { mkdir -p /etc/caddy; : > "$cfg"; }
+  esc="${dom//./\\.}"
+  if grep -qE "(^|[[:space:]/])${esc}[[:space:]]*\{" "$cfg"; then
+    ok "  Домен ${dom} уже есть в Caddyfile — оставляю как есть"
+  else
+    cp "$cfg" "$cfg.bak.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    cat >> "$cfg" <<EOF
+
+# RemnaShop cabinet — добавлено install.sh
+${dom} {
+    reverse_proxy 127.0.0.1:5002
+}
+EOF
+  fi
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy 2>/dev/null || true
+  ok "  Кабинет вписан в Caddy: ${dom} → 127.0.0.1:5002 (TLS авто)"
+}
+
+_install_nginx_pkg() {
+  command -v nginx >/dev/null 2>&1 && command -v certbot >/dev/null 2>&1 && return 0
+  info "  Устанавливаю nginx и certbot…"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null
+}
+
+# Дописать vhost кабинета в nginx ОТДЕЛЬНЫМ файлом (чужие конфиги не трогаем).
+_nginx_add_vhost() {
+  local dom="$1"
+  cat > /etc/nginx/sites-available/remnashop-cabinet.conf <<EOF
+server {
+    listen 80;
+    server_name ${dom};
+    location / {
+        proxy_pass http://127.0.0.1:5002;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+  ln -sf /etc/nginx/sites-available/remnashop-cabinet.conf /etc/nginx/sites-enabled/remnashop-cabinet.conf
+  nginx -t >/dev/null 2>&1 && systemctl reload nginx
+  if certbot --nginx -d "${dom}" --non-interactive --agree-tos \
+       --register-unsafely-without-email --redirect >/dev/null 2>&1; then
+    ok "  nginx + TLS: ${dom} → 127.0.0.1:5002"
+  else
+    warn "  nginx поднят на http, сертификат пока не выпустился (проверьте A-запись)."
+    say  "    После настройки DNS: ${DIM}certbot --nginx -d ${dom} --redirect${RST}"
+  fi
+}
+
+# HTTPS=caddy|nginx|none переопределяет вопрос (для неинтерактива).
+publish_cabinet_auto() {
+  local dom="$1" choice="${HTTPS:-}"
+
+  # 1) Caddy УЖЕ установлен — только дописываем в него (второй прокси не ставим).
+  if command -v caddy >/dev/null 2>&1; then
+    ok "  Обнаружен установленный Caddy — вписываю кабинет в него."
+    _caddy_add_vhost "$dom"
+    return 0
+  fi
+  # 2) nginx УЖЕ установлен — добавляем vhost кабинета + сертификат.
+  if command -v nginx >/dev/null 2>&1; then
+    ok "  Обнаружен установленный nginx — добавляю vhost кабинета."
+    _install_nginx_pkg
+    _nginx_add_vhost "$dom"
+    return 0
+  fi
+  # 3) Прокси нет, но 443 занят чем-то сторонним — не трогаем.
+  if ss -ltn 2>/dev/null | grep -q ':443 '; then
+    warn "  Порт 443 занят сторонним reverse-proxy — не трогаю его."
+    say  "  Направьте его на ${BOLD}127.0.0.1:5002${RST} (домен ${dom})."
+    return 0
+  fi
+  # 4) Чистый сервер — ставим выбранный прокси и выпускаем сертификат сами.
+  if [ -z "$choice" ] && [ -e /dev/tty ]; then
+    say "  ${BOLD}Чем поднять HTTPS на 443?${RST} (поставится и выпустит сертификат само)"
+    printf '    %s[1]%s Caddy (по умолчанию)   %s[2]%s nginx   %s[3]%s ничего (свой прокси): ' \
+      "$BOLD" "$RST" "$BOLD" "$RST" "$BOLD" "$RST"
+    read -r _a </dev/tty || _a=""
+    case "${_a}" in 2) choice=nginx ;; 3) choice=none ;; *) choice=caddy ;; esac
+  fi
+  case "${choice:-caddy}" in
+    nginx) _install_nginx_pkg; _nginx_add_vhost "$dom" ;;
+    none)  say "  ${DIM}Опубликуйте кабинет своим прокси: домен ${dom} → 127.0.0.1:5002${RST}" ;;
+    *)     _install_caddy_pkg; _caddy_add_vhost "$dom" ;;
+  esac
+}
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Режим SITE — только кабинет на отдельном сервере                         ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -187,9 +320,7 @@ if [ "$MODE" = "site" ]; then
   say ""
   say "${BOLD}Недостающие данные${RST} ${DIM}(секреты на сайт-сервере не нужны — их держит бот)${RST}"
 
-  # username бота — вшивается в бандл кабинета на сборке (Telegram-вход)
-  ask TELEGRAM_BOT_USERNAME "  Username бота без @ (для входа в кабинет)"
-  [ -n "${ASKED:-}" ] && ensure TELEGRAM_BOT_USERNAME "$ASKED"; ASKED=""
+  # Способ входа спросим ниже, когда узнаем URL кабинета (для подсказок).
 
   # Домен API бота — кабинет проксирует /api/ на ПУБЛИЧНЫЙ API бота по https
   # (его уже отдаёт reverse-proxy бота; WG/приватный канал не нужен).
@@ -214,6 +345,9 @@ if [ "$MODE" = "site" ]; then
   # публичный URL кабинета — для подсказки про reverse-proxy
   ask WEB_CABINET_URL "  Публичный URL кабинета (с https://)"
   [ -n "${ASKED:-}" ] && ensure WEB_CABINET_URL "$ASKED"; ASKED=""
+
+  # способ входа: OIDC (на боте) → классический виджет → только email
+  prompt_login_method "$(getval WEB_CABINET_URL)" site
 
   flush_env "Добавлено RemnaShop (кабинет, отдельный сервер)"
 
@@ -275,8 +409,8 @@ ok "Найден существующий .env — дополняю недост
 say ""
 say "${BOLD}Недостающие данные${RST} ${DIM}(остальное — автоматически)${RST}"
 
-# username бота — нужен кабинету для входа через Telegram
-ask TELEGRAM_BOT_USERNAME "  Username бота без @ (для входа в кабинет)" && [ -n "${ASKED:-}" ] && ensure TELEGRAM_BOT_USERNAME "$ASKED"; ASKED=""
+# Способ входа в кабинет (OIDC / классический виджет / только email) спросим
+# ниже — после того, как узнаем URL кабинета (нужен для подсказки Redirect URI).
 
 # публичный URL кабинета (дефолт — по APP_DOMAIN из существующего .env).
 # В режиме api это URL УДАЛЁННОГО кабинета (на другой машине) — он пойдёт в CORS.
@@ -288,6 +422,12 @@ else
 fi
 [ -n "${ASKED:-}" ] && ensure WEB_CABINET_URL "$ASKED"
 CAB_URL="$(getval WEB_CABINET_URL)"; CAB_URL="${CAB_URL:-${ASKED:-}}"; ASKED=""
+
+# способ входа в кабинет: OIDC → классический виджет → только email
+prompt_login_method "$CAB_URL"
+# Ключ должен присутствовать даже при выборе OIDC/email — иначе сборка кабинета
+# ругается на незаданную переменную build-arg (VITE_TELEGRAM_BOT_USERNAME).
+ensure TELEGRAM_BOT_USERNAME ""
 
 # разрешённый origin = URL кабинета
 ensure APP_ORIGINS "$CAB_URL"
@@ -311,18 +451,35 @@ fi
 # ── email (необязательно) ─────────────────────────────────────────────────────
 if need_value EMAIL_ENABLED; then
   say ""
-  if ask_yn "Настроить отправку email сейчас? (нужно для регистрации по почте)"; then
+  if ask_yn "Настроить отправку email сейчас? (нужно для регистрации/сброса пароля по почте)"; then
     ensure EMAIL_ENABLED true
-    info "Email (Brevo рекомендуется — обходит блокировки SMTP)"
-    ask EMAIL_BREVO_API_KEY "  Brevo API key (xkeysib-…), Enter — пропустить" "-"
-    [ "${ASKED:-}" != "-" ] && ensure EMAIL_BREVO_API_KEY "${ASKED}"; ASKED=""
+    # Провайдер на выбор: пресеты host/port/TLS подставляются автоматически,
+    # вводятся только логин/пароль/отправитель. Можно поменять позже в админке.
+    say "  ${BOLD}Провайдер почты:${RST}"
+    printf '    %s[1]%s Gmail   %s[2]%s Yandex   %s[3]%s Mail.ru   %s[4]%s Brevo (API)   %s[5]%s свой SMTP: ' \
+      "$BOLD" "$RST" "$BOLD" "$RST" "$BOLD" "$RST" "$BOLD" "$RST" "$BOLD" "$RST"
+    read -r _p </dev/tty || _p=""
+    case "${_p}" in
+      2) ensure EMAIL_HOST smtp.yandex.ru; ensure EMAIL_PORT 465; ensure EMAIL_USE_TLS false; ensure EMAIL_USE_SSL true ;;
+      3) ensure EMAIL_HOST smtp.mail.ru;   ensure EMAIL_PORT 465; ensure EMAIL_USE_TLS false; ensure EMAIL_USE_SSL true ;;
+      4) EMAIL_PROVIDER_BREVO=1 ;;
+      5) ask EMAIL_HOST "  SMTP host" "smtp.example.com"; ensure EMAIL_HOST "$ASKED"; ASKED=""
+         ask EMAIL_PORT "  SMTP port (587 STARTTLS / 465 SSL)" "587"; ensure EMAIL_PORT "$ASKED"
+         if [ "${ASKED}" = "465" ]; then ensure EMAIL_USE_TLS false; ensure EMAIL_USE_SSL true; else ensure EMAIL_USE_TLS true; ensure EMAIL_USE_SSL false; fi; ASKED="" ;;
+      *) ensure EMAIL_HOST smtp.gmail.com; ensure EMAIL_PORT 587; ensure EMAIL_USE_TLS true; ensure EMAIL_USE_SSL false ;;
+    esac
+
     ask EMAIL_FROM_EMAIL "  Адрес отправителя (From)"; [ -n "${ASKED:-}" ] && ensure EMAIL_FROM_EMAIL "$ASKED"; FROM="${ASKED:-}"; ASKED=""
     ask EMAIL_FROM_NAME  "  Имя отправителя" "RemnaShop"; ensure EMAIL_FROM_NAME "$ASKED"; ASKED=""
-    ask EMAIL_HOST "  SMTP host" "smtp.gmail.com"; ensure EMAIL_HOST "$ASKED"; ASKED=""
-    ask EMAIL_PORT "  SMTP port" "587"; ensure EMAIL_PORT "$ASKED"; ASKED=""
-    ask EMAIL_USERNAME "  SMTP логин" "${FROM}"; ensure EMAIL_USERNAME "$ASKED"; ASKED=""
-    ask EMAIL_PASSWORD "  SMTP пароль / app password, Enter — пропустить" "-"
-    [ "${ASKED:-}" != "-" ] && ensure EMAIL_PASSWORD "${ASKED}"; ASKED=""
+
+    if [ "${EMAIL_PROVIDER_BREVO:-}" = 1 ]; then
+      # Brevo: нужен только API-ключ (письма уходят через HTTP API, порт 443).
+      ask EMAIL_BREVO_API_KEY "  Brevo API key (xkeysib-…)"; [ -n "${ASKED:-}" ] && ensure EMAIL_BREVO_API_KEY "$ASKED"; ASKED=""
+    else
+      # SMTP-провайдер: логин + пароль приложения (app password!).
+      ask EMAIL_USERNAME "  SMTP логин (email)" "${FROM}"; ensure EMAIL_USERNAME "$ASKED"; ASKED=""
+      ask EMAIL_PASSWORD "  Пароль приложения (app password)"; [ -n "${ASKED:-}" ] && ensure EMAIL_PASSWORD "$ASKED"; ASKED=""
+    fi
   else
     ensure EMAIL_ENABLED false
     warn "Email отключён — регистрация только через Telegram. Включить позже можно в .env."
@@ -360,18 +517,24 @@ if [ "$WITH_CABINET" = yes ]; then
   # Пытаемся опубликовать кабинет автоматически через Caddy панели Remnawave.
   CAB_DOM="${CAB_URL#http://}"; CAB_DOM="${CAB_DOM#https://}"; CAB_DOM="${CAB_DOM%%/*}"
   if wire_cabinet_into_panel_caddy "$CAB_DOM"; then
-    say "  ${GRN}Кабинет опубликован автоматически:${RST} ${BOLD}https://${CAB_DOM}${RST}"
+    say "  ${GRN}Кабинет опубликован автоматически (Caddy панели):${RST} ${BOLD}https://${CAB_DOM}${RST}"
     say "  ${DIM}(проверьте A-запись ${CAB_DOM} → IP этого сервера)${RST}"
   else
-    say "  ${YLW}Дальше:${RST} Caddy панели Remnawave не найден — опубликуйте кабинет"
-    say "  своим reverse-proxy с TLS (возьмите блок под то, что у вас стоит):"
-    print_proxy_blocks "${CAB_DOM:-cabinet.example.com}"
+    # Caddy панели нет — ставим свой reverse-proxy сами (выбор Caddy/nginx).
+    publish_cabinet_auto "$CAB_DOM"
   fi
   say ""
-  say "  ${YLW}Не забудьте (для входа через Telegram в браузере):${RST}"
-  say "    привяжите домен кабинета к боту в @BotFather:"
-  say "      • новые боты: Bot Settings → Web Login → Allowed URLs → ${BOLD}${CAB_URL:-https://домен}${RST}"
-  say "      • старые боты: /setdomain → ${BOLD}${CAB_DOM:-домен}${RST} (без https://)"
+  if [ -n "$(getval TELEGRAM_OIDC_CLIENT_ID)" ]; then
+    say "  ${YLW}Не забудьте (вход через Telegram OIDC):${RST}"
+    say "    @BotFather → Login Widget → Add a Redirect URI:"
+    say "      ${BOLD}${CAB_URL%/}/api/auth/telegram/oidc/callback${RST}"
+  elif [ -n "$(getval TELEGRAM_BOT_USERNAME)" ]; then
+    say "  ${YLW}Не забудьте (классический вход через Telegram):${RST}"
+    say "    привяжите домен кабинета к боту в @BotFather:"
+    say "      /setdomain → ${BOLD}${CAB_DOM:-домен}${RST} (без https://)"
+  else
+    say "  ${DIM}Вход через Telegram не настроен — в кабинет входят по email.${RST}"
+  fi
   say ""
   say "  Логи:   ${DIM}$DC -f docker-compose.yml -f cabinet/docker-compose.cabinet.yml logs -f${RST}"
 else

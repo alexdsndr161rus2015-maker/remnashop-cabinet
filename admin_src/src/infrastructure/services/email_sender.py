@@ -11,6 +11,7 @@ from src.application.common.email_sender import EmailSender
 from src.core.config import AppConfig
 from src.core.constants import EMAIL_VERIFICATION_SUBJECT
 from src.core.exceptions import EmailDeliveryError
+from src.infrastructure.services.email_settings import load_email_settings
 from src.infrastructure.services.email_template_config import fill, load_email_template
 
 # На этом хостинге исходящие SMTP-порты (25/465/587) заблокированы провайдером,
@@ -110,35 +111,42 @@ class SmtpEmailSender(EmailSender):
     def __init__(self, config: AppConfig) -> None:
         self._config = config
 
+    def _settings(self) -> dict:
+        # Эффективные настройки: .env + сохранённое из админки (assets/email.json).
+        # Читаем при каждой отправке — правки в админке применяются сразу.
+        return load_email_settings(self._config)
+
+    @staticmethod
+    def _use_brevo(s: dict) -> bool:
+        # Brevo используем, только если он ВЫБРАН провайдером и задан ключ.
+        return s["provider"] == "brevo" and bool(s["brevo_api_key"])
+
     @property
     def is_enabled(self) -> bool:
-        email = self._config.email
-        if not email.enabled or not email.from_email:
+        s = self._settings()
+        if not s["enabled"] or not s["from_email"]:
             return False
         # Brevo требует только API-ключ и адрес отправителя.
-        if _brevo_api_key():
+        if self._use_brevo(s):
             return True
         # Иначе нужен полноценный SMTP-конфиг.
-        return bool(
-            email.host
-            and email.username.get_secret_value()
-            and email.password.get_secret_value()
-        )
+        return bool(s["host"] and s["username"] and s["password"])
 
-    def _localize(self, *, subject: str, body: str) -> tuple[str, str, str]:
+    def _localize(self, settings: dict, *, subject: str, body: str) -> tuple[str, str, str]:
         """Возвращает (subject, text, html) — русифицируем письмо с кодом."""
         if subject == EMAIL_VERIFICATION_SUBJECT:
-            return _render_verification(body, self._config.email.from_name.strip())
+            return _render_verification(body, (settings["from_name"] or "").strip())
         return subject, body, _text_to_html(body)
 
     async def send(self, *, to: str, subject: str, body: str) -> None:
         try:
-            subject, text, html = self._localize(subject=subject, body=body)
-            if _brevo_api_key():
-                await self._send_brevo(to=to, subject=subject, text=text, html=html)
+            s = self._settings()
+            subject, text, html = self._localize(s, subject=subject, body=body)
+            if self._use_brevo(s):
+                await self._send_brevo(s, to=to, subject=subject, text=text, html=html)
             else:
                 await asyncio.to_thread(
-                    self._send_smtp, to=to, subject=subject, text=text, html=html
+                    self._send_smtp, s, to=to, subject=subject, text=text, html=html
                 )
         except Exception as e:
             logger.error(f"Failed to send email to '{to}': {e}")
@@ -146,10 +154,9 @@ class SmtpEmailSender(EmailSender):
                 "Failed to send verification email. Please try again later."
             ) from e
 
-    async def _send_brevo(self, *, to: str, subject: str, text: str, html: str) -> None:
-        email = self._config.email
-        from_name = email.from_name.strip()
-        from_email = email.from_email.strip()
+    async def _send_brevo(self, s: dict, *, to: str, subject: str, text: str, html: str) -> None:
+        from_name = (s["from_name"] or "").strip()
+        from_email = (s["from_email"] or "").strip()
 
         payload = {
             "sender": {"email": from_email, **({"name": from_name} if from_name else {})},
@@ -159,7 +166,7 @@ class SmtpEmailSender(EmailSender):
             "htmlContent": html,
         }
         headers = {
-            "api-key": _brevo_api_key(),
+            "api-key": s["brevo_api_key"],
             "accept": "application/json",
             "content-type": "application/json",
         }
@@ -173,29 +180,28 @@ class SmtpEmailSender(EmailSender):
             )
         logger.info(f"Email sent to '{to}' via Brevo (status {resp.status_code})")
 
-    def _send_smtp(self, *, to: str, subject: str, text: str, html: str) -> None:
-        email = self._config.email
+    def _send_smtp(self, s: dict, *, to: str, subject: str, text: str, html: str) -> None:
         message = EmailMessage()
         message["Subject"] = subject
-        from_name = email.from_name.strip()
-        from_email = email.from_email.strip()
+        from_name = (s["from_name"] or "").strip()
+        from_email = (s["from_email"] or "").strip()
         message["From"] = f"{from_name} <{from_email}>" if from_name else from_email
         message["To"] = to
         message.set_content(text)
         message.add_alternative(html, subtype="html")
 
-        smtp_user = email.username.get_secret_value()
-        smtp_password = email.password.get_secret_value()
+        host, port = s["host"], int(s["port"])
+        smtp_user, smtp_password = s["username"], s["password"]
 
-        if email.use_ssl:
-            with smtplib.SMTP_SSL(email.host, email.port, timeout=20) as client:
+        if s["use_ssl"]:
+            with smtplib.SMTP_SSL(host, port, timeout=20) as client:
                 client.login(smtp_user, smtp_password)
                 client.send_message(message)
             return
 
-        with smtplib.SMTP(email.host, email.port, timeout=20) as client:
+        with smtplib.SMTP(host, port, timeout=20) as client:
             client.ehlo()
-            if email.use_tls:
+            if s["use_tls"]:
                 client.starttls()
                 client.ehlo()
             client.login(smtp_user, smtp_password)

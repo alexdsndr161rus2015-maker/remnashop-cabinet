@@ -20,6 +20,7 @@ import {
   Smartphone,
   SquareMenu,
   Mail,
+  Info,
   Menu,
   X,
 } from "lucide-react";
@@ -65,6 +66,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     title: "Кабинет",
     items: [
       { to: "/admin/appearance", icon: Palette, label: "Оформление" },
+      { to: "/admin/info", icon: Info, label: "Информация" },
       { to: "/admin/menu", icon: SquareMenu, label: "Меню" },
       { to: "/admin/apps", icon: Smartphone, label: "Приложения" },
       { to: "/admin/email", icon: Mail, label: "Письмо" },

@@ -103,16 +103,27 @@ proxy_hint() {
   say "    ${DIM}}${RST}"
 }
 
-# Caddy: поставить + настроить, сертификат выпустится сам.
+# Caddy: поставить (если нет) и вписать кабинет. Если Caddyfile УЖЕ есть (с другими
+# сайтами) — ДОПИСЫВАЕМ блок (не перезаписываем); если файла нет — создаём. Идемпотентно.
 setup_caddy() {
   install_caddy
-  cat > /etc/caddy/Caddyfile <<EOF
+  local cfg="/etc/caddy/Caddyfile" esc
+  [ -f "$cfg" ] || { mkdir -p /etc/caddy; : > "$cfg"; }
+  esc="${CAB_DOM//./\\.}"
+  if grep -qE "(^|[[:space:]/])${esc}[[:space:]]*\{" "$cfg"; then
+    ok "Домен ${CAB_DOM} уже есть в Caddyfile — оставляю как есть"
+  else
+    cp "$cfg" "$cfg.bak.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    cat >> "$cfg" <<EOF
+
+# RemnaShop cabinet — добавлено site-install.sh
 ${CAB_DOM} {
     reverse_proxy 127.0.0.1:5002
 }
 EOF
-  systemctl restart caddy
-  ok "Caddy настроен сам: ${CAB_DOM} → 127.0.0.1:5002 (TLS авто-сертификат)"
+  fi
+  systemctl reload caddy 2>/dev/null || systemctl restart caddy
+  ok "Кабинет вписан в Caddy: ${CAB_DOM} → 127.0.0.1:5002 (TLS авто-сертификат)"
 }
 
 # nginx + certbot: поставить, настроить vhost и ВЫПУСТИТЬ СЕРТИФИКАТ автоматически.
@@ -154,7 +165,15 @@ EOF
 #     (оба выпускают сертификат автоматически). По умолчанию Caddy.
 # Переопределить без вопроса: HTTPS=caddy | nginx | none (none = свой прокси).
 say ""
-if ss -ltn 2>/dev/null | grep -q ':443 '; then
+if command -v caddy >/dev/null 2>&1; then
+  # Caddy уже установлен — только дописываем кабинет в его конфиг (не ставим второй).
+  ok "Обнаружен установленный Caddy — вписываю кабинет в него."
+  setup_caddy
+elif command -v nginx >/dev/null 2>&1; then
+  # nginx уже установлен — добавляем vhost кабинета отдельным файлом.
+  ok "Обнаружен установленный nginx — добавляю vhost кабинета."
+  setup_nginx
+elif ss -ltn 2>/dev/null | grep -q ':443 '; then
   warn "Порт 443 уже занят — у вас свой reverse-proxy. Не трогаю его."
   proxy_hint
 else
@@ -182,10 +201,16 @@ say "  ${YLW}Проверьте:${RST}"
 say "   • A-запись ${BOLD}${CAB_DOM}${RST} → IP этого сервера;"
 say "   • у провайдера открыты входящие ${BOLD}TCP 80 и 443${RST} (80 нужен для выпуска сертификата)."
 say ""
-say "  ${YLW}Не забудьте (для входа через Telegram в браузере):${RST}"
-say "   привяжите домен кабинета к боту в @BotFather:"
-say "     • новые боты: Bot Settings → Web Login → Allowed URLs → ${BOLD}https://${CAB_DOM}${RST}"
-say "     • старые боты: /setdomain → ${BOLD}${CAB_DOM}${RST} (без https://)"
+_BU="$(grep -E '^TELEGRAM_BOT_USERNAME=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"')"
+if [ -n "${_BU}" ]; then
+  say "  ${YLW}Не забудьте (классический вход через Telegram):${RST}"
+  say "   привяжите домен кабинета к боту: @BotFather → /setdomain → ${BOLD}${CAB_DOM}${RST} (без https://)"
+else
+  say "  ${YLW}Вход через Telegram:${RST} настраивается на сервере БОТА."
+  say "   Для OIDC в @BotFather → Login Widget → Add a Redirect URI:"
+  say "     ${BOLD}https://${CAB_DOM}/api/auth/telegram/oidc/callback${RST}"
+  say "   ${DIM}(если Telegram-вход не нужен — в кабинет входят по email)${RST}"
+fi
 say ""
 say "  Проверка после смены DNS (~30 сек на сертификат):"
 say "    ${DIM}curl -s -o /dev/null -w 'SPA %{http_code}\\n' https://${CAB_DOM}/${RST}"

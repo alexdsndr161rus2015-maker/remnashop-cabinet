@@ -19,7 +19,7 @@ function getTelegramInitData(): string | null {
 }
 
 export default function LoginPage() {
-  const { login, loginWithTelegram, loginWithTelegramWebApp } = useAuth();
+  const { login, loginWithTelegram, loginWithTelegramWebApp, user } = useAuth();
   const { telegramOidcEnabled } = useBranding();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -77,6 +77,12 @@ export default function LoginPage() {
       cancelled = true;
     };
   }, [loginWithTelegramWebApp, navigate, next]);
+
+  // Уже залогинен (сессия жива — access 15 мин, refresh 30 дней) — не показываем
+  // форму входа и не гоняем через Telegram повторно, сразу уводим в кабинет.
+  useEffect(() => {
+    if (user) navigate(next, { replace: true });
+  }, [user, navigate, next]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,9 +156,9 @@ export default function LoginPage() {
         <div className="rounded-xl border border-[var(--border)] bg-bg-raised p-6">
           {(telegramOidcEnabled || TELEGRAM_BOT_USERNAME) && (
             <>
-              {/* Показываем ОБА способа входа через Telegram, если оба доступны:
-                  новый OIDC (без «deprecated») + классический виджет как привычный
-                  запасной. Включение OIDC не убирает старый вход. */}
+              {/* Если включён OIDC — показываем ТОЛЬКО его кнопку. Классический
+                  Login Widget оставляем лишь как запасной, когда OIDC выключен
+                  (иначе он рендерит «Bot domain invalid», т.к. требует /setdomain). */}
               <div className="flex flex-col items-stretch gap-2.5">
                 {telegramOidcEnabled && (
                   // Новый флоу Telegram (OpenID Connect): редирект на oauth.telegram.org.
@@ -169,7 +175,7 @@ export default function LoginPage() {
                     Войти через Telegram
                   </button>
                 )}
-                {TELEGRAM_BOT_USERNAME && (
+                {!telegramOidcEnabled && TELEGRAM_BOT_USERNAME && (
                   <div className="flex justify-center">
                     <TelegramLoginButton
                       botUsername={TELEGRAM_BOT_USERNAME}
@@ -184,6 +190,12 @@ export default function LoginPage() {
                 <div className="h-px flex-1 bg-[var(--border)]" />
               </div>
             </>
+          )}
+
+          {searchParams.get("reset") === "ok" && (
+            <p className="mb-4 rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
+              Пароль изменён. Войдите с новым паролем.
+            </p>
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -205,6 +217,15 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+
+            <div className="-mt-1 text-right">
+              <Link
+                to="/reset-password"
+                className="text-xs text-fg-subtle transition-colors hover:text-accent"
+              >
+                Забыли пароль?
+              </Link>
+            </div>
 
             {error && <p className="text-xs text-danger">{error}</p>}
 

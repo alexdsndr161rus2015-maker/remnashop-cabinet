@@ -55,4 +55,12 @@ export const authApi = {
 
   // Удалить привязанную почту (доступно только при наличии Telegram-входа).
   deleteEmail: () => api.delete<{ success: boolean }>("/auth/email"),
+
+  // Сброс пароля по email («Забыл пароль») — для НЕвошедших.
+  // Ответ на /request всегда success (не раскрываем, есть ли аккаунт).
+  resetPasswordRequest: (email: string) =>
+    api.post<{ success: boolean }>("/auth/password/reset/request", { email }, { skipAuthRetry: true }),
+
+  resetPasswordConfirm: (data: { email: string; code: string; password: string }) =>
+    api.post<{ success: boolean }>("/auth/password/reset/confirm", data, { skipAuthRetry: true }),
 };

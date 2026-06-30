@@ -225,7 +225,16 @@ async def oidc_callback(
         if nonce and claims.get("nonce") not in (None, nonce):
             raise ValueError("nonce mismatch")
 
-        tg_id = int(claims["sub"])
+        # ВАЖНО: настоящий числовой Telegram-ID лежит в claim "id", а НЕ в "sub".
+        # В id_token Telegram OIDC "sub" — это отдельный идентификатор и НЕ равен
+        # Telegram user id, тогда как "id" совпадает с тем, что отдаёт классический
+        # Login Widget и что хранится у нас в БД (users.telegram_id). Если брать "sub",
+        # get_by_telegram_id ничего не находит → создаётся новый USER → у админа/
+        # владельца «слетает» роль. Поэтому берём "id" (с фолбэком на "sub").
+        raw_tg_id = claims.get("id")
+        if raw_tg_id is None:
+            raw_tg_id = claims.get("sub")
+        tg_id = int(raw_tg_id)
     except Exception:
         # Любой сбой обмена/проверки → мягко возвращаем на экран входа.
         return RedirectResponse(f"{login_url}?error=telegram", status_code=302)

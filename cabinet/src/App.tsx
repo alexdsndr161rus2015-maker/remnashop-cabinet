@@ -7,6 +7,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import DevicesPage from "@/pages/DevicesPage";
 import BillingPage from "@/pages/BillingPage";
@@ -25,6 +26,7 @@ import AdminAdLinksPage from "@/pages/admin/AdminAdLinksPage";
 import AdminBroadcastsPage from "@/pages/admin/AdminBroadcastsPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 import AdminAppearancePage from "@/pages/admin/AdminAppearancePage";
+import AdminInfoPage from "@/pages/admin/AdminInfoPage";
 import AdminRemnaWavePage from "@/pages/admin/AdminRemnaWavePage";
 import AdminSupportPage from "@/pages/admin/AdminSupportPage";
 import AdminAuditPage from "@/pages/admin/AdminAuditPage";
@@ -54,6 +56,14 @@ export default function App() {
               element={
                 <PublicOnlyRoute>
                   <RegisterPage />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicOnlyRoute>
+                  <ResetPasswordPage />
                 </PublicOnlyRoute>
               }
             />
@@ -209,6 +219,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <AdminAppearancePage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/info"
+              element={
+                <AdminRoute>
+                  <AdminInfoPage />
                 </AdminRoute>
               }
             />
