@@ -34,7 +34,8 @@ from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
-from src.application.common.dao import UserDao
+from src.application.common import Remnawave
+from src.application.common.dao import SubscriptionDao, UserDao
 from src.application.common.dao.auth import AuthSessionDao
 from src.application.common.uow import UnitOfWork
 from src.application.use_cases.user.commands.web_registration import RegisterWebUser
@@ -177,6 +178,8 @@ async def oidc_callback(
     register_web_user: FromDishka[RegisterWebUser],
     auth_session: FromDishka[AuthSessionDao],
     uow: FromDishka[UnitOfWork],
+    subscription_dao: FromDishka[SubscriptionDao],
+    remnawave: FromDishka[Remnawave],
 ) -> RedirectResponse:
     if not oidc_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -278,9 +281,33 @@ async def oidc_callback(
 
         existing = await user_dao.get_by_telegram_id(tg_id)
         if existing and existing.id != current.id:
-            # У этого Telegram уже есть отдельный аккаунт (возможно с подпиской).
-            # Объединение — отдельная фича; пока безопасно отказываем без дубля.
-            return _back("conflict")
+            # У этого Telegram уже есть отдельный аккаунт.
+            #  • активная подписка → не трогаем (платный акк), безопасно отказываем;
+            #  • истёкшая/нет → освобождаем Telegram у старого, чтобы текущий принял
+            #    его как быстрый вход. Старый НЕ удаляем — только снимаем telegram_id
+            #    и чистим его юзера в панели (иначе при синке коллизия rs_<tg_id>).
+            other_sub = await subscription_dao.get_current(existing.id)
+            if other_sub is not None and other_sub.is_active:
+                return _back("conflict")
+
+            try:
+                seen: set = set()
+                for s in await subscription_dao.get_all_by_user(existing.id):
+                    remna_id = getattr(s, "user_remna_id", None)
+                    if remna_id and remna_id not in seen:
+                        seen.add(remna_id)
+                        try:
+                            await remnawave.delete_user(remna_id)
+                        except Exception:
+                            pass  # панель недоступна — привязку не валим
+            except Exception:
+                pass
+
+            existing.telegram_id = None
+            async with uow:
+                await user_dao.update(existing)
+                await uow.commit()
+            # дальше — обычная привязка tg_id к current (telegram_id уже свободен)
 
         current.telegram_id = tg_id
         if data.username is not None:

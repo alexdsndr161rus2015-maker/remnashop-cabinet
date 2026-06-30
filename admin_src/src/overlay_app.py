@@ -77,6 +77,17 @@ _SUPPORT_TABLES_DDL = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_admin_audit_created ON admin_audit_log (created_at DESC)",
+    """
+    CREATE TABLE IF NOT EXISTS login_events (
+        id          BIGSERIAL PRIMARY KEY,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ip          VARCHAR(64),
+        user_agent  VARCHAR(400),
+        method      VARCHAR(20),
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_login_events_user ON login_events (user_id, created_at DESC)",
 )
 
 
@@ -165,8 +176,99 @@ def application() -> FastAPI:
 
     _wrap_lifespan_with_support_tables(app, container)
     _add_admin_audit_middleware(app, container)
+    _add_login_tracking_middleware(app, container)
 
     return app
+
+
+# Пути входа (по суффиксу полного пути). При успехе они выставляют access_token —
+# по нему и пишем событие входа. /auth/refresh и /auth/telegram/link исключены
+# (refresh не login; link не выставляет access_token).
+_LOGIN_PATH_SUFFIXES = (
+    "/auth/login",
+    "/auth/register",
+    "/auth/telegram",
+    "/auth/telegram/webapp",
+    "/auth/telegram/oidc/callback",
+)
+
+
+def _login_method(path: str) -> str:
+    if path.endswith("/oidc/callback"):
+        return "telegram_oidc"
+    if path.endswith("/telegram/webapp"):
+        return "telegram_webapp"
+    if path.endswith("/auth/telegram"):
+        return "telegram"
+    if path.endswith("/auth/register"):
+        return "register"
+    return "email"
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()[:64]
+    xr = request.headers.get("x-real-ip")
+    if xr:
+        return xr.strip()[:64]
+    return (request.client.host if request.client else "")[:64]
+
+
+def _access_token_from_setcookie(response) -> "str | None":  # type: ignore[name-defined]
+    for h in response.headers.getlist("set-cookie"):
+        if h.startswith("access_token="):
+            val = h.split("access_token=", 1)[1].split(";", 1)[0]
+            return val or None
+    return None
+
+
+def _add_login_tracking_middleware(app: FastAPI, container: AsyncContainer) -> None:
+    """Пишет событие входа в login_events при успешном логине (любым способом).
+
+    Распознаём вход по: путь — один из login-суффиксов И в ответе выставлен свежий
+    access_token (значит логин удался). По токену получаем user_id. Ошибки записи
+    не влияют на ответ.
+    """
+
+    @app.middleware("http")
+    async def _track_login(request: Request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        try:
+            path = request.url.path
+            if response.status_code < 400 and any(
+                path.endswith(s) for s in _LOGIN_PATH_SUFFIXES
+            ):
+                token = _access_token_from_setcookie(response)
+                if token:
+                    from src.web.endpoints.public._common import decode_access_token
+
+                    cfg = AppConfig.get()
+                    secret = (
+                        cfg.jwt_secret.get_secret_value()
+                        if getattr(cfg, "jwt_secret", None)
+                        else None
+                    )
+                    if secret:
+                        uid = decode_access_token(token, secret)
+                        sm = await container.get(async_sessionmaker[AsyncSession])
+                        async with sm() as s:
+                            await s.execute(
+                                text(
+                                    "INSERT INTO login_events (user_id, ip, user_agent, method) "
+                                    "VALUES (:u, :ip, :ua, :m)"
+                                ),
+                                {
+                                    "u": uid,
+                                    "ip": _client_ip(request),
+                                    "ua": (request.headers.get("user-agent") or "")[:400],
+                                    "m": _login_method(path),
+                                },
+                            )
+                            await s.commit()
+        except Exception:  # noqa: BLE001 — трекинг не должен ронять запрос
+            logger.debug("login event write skipped")
+        return response
 
 
 _AUDIT_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

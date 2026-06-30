@@ -85,7 +85,9 @@ export interface GatewayStats {
 }
 
 export interface AdminUser {
-  id: number;
+  // id/telegram_id/email/referral_code приходят null для роли «только просмотр»
+  // (сервер маскирует личные идентификаторы).
+  id: number | null;
   telegram_id: number | null;
   auth_type: string;
   email: string | null;
@@ -100,8 +102,23 @@ export interface AdminUser {
   personal_discount: number;
   purchase_discount: number;
   points: number;
-  referral_code: string;
+  referral_code: string | null;
   created_at: string | null;
+  last_login_at?: string | null;
+}
+
+export interface LoginEvent {
+  ip: string | null;
+  user_agent: string | null;
+  method: string | null;
+  created_at: string | null;
+}
+
+export interface LoginHistory {
+  total: number;
+  distinct_ips: number;
+  last_login_at: string | null;
+  items: LoginEvent[];
 }
 
 export interface AdminUserDetail {
@@ -115,12 +132,14 @@ export interface AdminUserDetail {
     device_limit: number;
   } | null;
   subscriptions_count: number;
+  logins?: { total: number; distinct_ips: number; last_login_at: string | null };
   transactions: AdminTransaction[];
 }
 
 export interface AdminTransaction {
-  payment_id: string;
-  user_id: number;
+  // payment_id/user_id приходят null для роли «только просмотр» (маскировка).
+  payment_id: string | null;
+  user_id: number | null;
   user_name: string | null;
   user_email: string | null;
   status: string;
@@ -160,15 +179,22 @@ export const statisticsApi = {
 };
 
 export const usersAdminApi = {
-  list: (params: { limit?: number; offset?: number; search?: string; blocked?: boolean }) => {
+  list: (params: {
+    limit?: number; offset?: number; search?: string; blocked?: boolean;
+    role?: number; sort?: string; order?: string;
+  }) => {
     const qs = new URLSearchParams();
     if (params.limit != null) qs.set("limit", String(params.limit));
     if (params.offset != null) qs.set("offset", String(params.offset));
     if (params.search) qs.set("search", params.search);
     if (params.blocked != null) qs.set("blocked", String(params.blocked));
+    if (params.role != null) qs.set("role", String(params.role));
+    if (params.sort) qs.set("sort", params.sort);
+    if (params.order) qs.set("order", params.order);
     return adminApi.get<PaginatedResponse<AdminUser>>(`/users?${qs}`);
   },
   get: (id: number) => adminApi.get<AdminUserDetail>(`/users/${id}`),
+  logins: (id: number) => adminApi.get<LoginHistory>(`/users/${id}/logins`),
   block: (id: number, is_blocked: boolean) =>
     adminApi.put<{ success: boolean; is_blocked: boolean }>(`/users/${id}/block`, { is_blocked }),
   changeRole: (id: number, role: number) =>
@@ -181,12 +207,17 @@ export const usersAdminApi = {
 };
 
 export const transactionsAdminApi = {
-  list: (params: { limit?: number; offset?: number; status?: string; gateway?: string }) => {
+  list: (params: {
+    limit?: number; offset?: number; status?: string; gateway?: string;
+    date_from?: string; date_to?: string;
+  }) => {
     const qs = new URLSearchParams();
     if (params.limit != null) qs.set("limit", String(params.limit));
     if (params.offset != null) qs.set("offset", String(params.offset));
     if (params.status) qs.set("status", params.status);
     if (params.gateway) qs.set("gateway", params.gateway);
+    if (params.date_from) qs.set("date_from", params.date_from);
+    if (params.date_to) qs.set("date_to", params.date_to);
     return adminApi.get<PaginatedResponse<AdminTransaction>>(`/transactions?${qs}`);
   },
 };

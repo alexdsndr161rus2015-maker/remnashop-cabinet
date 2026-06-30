@@ -4,6 +4,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.common.dao import SubscriptionDao, TransactionDao, UserDao
@@ -11,6 +12,7 @@ from src.application.dto import UserDto
 from src.core.enums import Role
 
 from ._common import AdminUser
+from ._redact import is_readonly_admin, redact_user
 
 router = APIRouter(prefix="/users", tags=["Admin - Users"])
 
@@ -40,41 +42,99 @@ def _user_to_dict(user: UserDto) -> dict[str, Any]:
 @router.get("")
 @inject
 async def list_users(
-    _admin: AdminUser,
+    admin: AdminUser,
     user_dao: FromDishka[UserDao],
+    session: FromDishka[AsyncSession],
     limit: int = Query(default=25, le=100),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
     blocked: Optional[bool] = Query(default=None),
+    role: Optional[int] = Query(default=None),
+    sort: str = Query(default="created_at"),
+    order: str = Query(default="desc"),
 ) -> dict[str, Any]:
+    # Гибкий фильтр+сортировка. last_login берём из login_events (LEFT JOIN),
+    # чтобы можно было сортировать по дате последнего входа.
+    where: list[str] = []
+    params: dict[str, Any] = {}
     if search:
-        users = await user_dao.get_by_partial_name(search)
-        total = len(users)
-        users = users[offset : offset + limit]
-    elif blocked is True:
-        users = await user_dao.get_blocked_users()
-        total = len(users)
-        users = users[offset : offset + limit]
-    else:
-        total = await user_dao.count()
-        users = await user_dao.get_all(limit=limit, offset=offset)
+        where.append("(u.name ILIKE :s OR u.email ILIKE :s OR u.username ILIKE :s)")
+        params["s"] = f"%{search.strip()}%"
+    if blocked is not None:
+        where.append("u.is_blocked = :bl")
+        params["bl"] = blocked
+    if role is not None:
+        try:
+            params["r"] = Role(role).name
+            where.append("u.role = :r")
+        except ValueError:
+            pass
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
-    return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "items": [_user_to_dict(u) for u in users],
-    }
+    # Колонка сортировки — строго из белого списка (без SQL-инъекций).
+    sort_col = {
+        "created_at": "u.created_at",
+        "last_login": "ll.last_login",
+        "name": "lower(u.name)",
+    }.get(sort, "u.created_at")
+    direction = "ASC" if str(order).lower() == "asc" else "DESC"
+    nulls = "NULLS LAST" if direction == "DESC" else "NULLS FIRST"
+
+    total = (
+        await session.execute(text(f"SELECT count(*) FROM users u {where_sql}"), params)
+    ).scalar_one()
+
+    rows = (
+        await session.execute(
+            text(
+                f"""
+                SELECT u.id AS id, ll.last_login AS last_login
+                FROM users u
+                LEFT JOIN (
+                    SELECT user_id, max(created_at) AS last_login
+                    FROM login_events GROUP BY user_id
+                ) ll ON ll.user_id = u.id
+                {where_sql}
+                ORDER BY {sort_col} {direction} {nulls}, u.id DESC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            {**params, "limit": limit, "offset": offset},
+        )
+    ).all()
+
+    ids = [r.id for r in rows]
+    last_map = {r.id: r.last_login for r in rows}
+    by_id: dict[int, UserDto] = {}
+    if ids:
+        for u in await user_dao.get_by_ids(ids):
+            by_id[u.id] = u
+
+    items = []
+    for uid in ids:  # сохраняем порядок сортировки
+        u = by_id.get(uid)
+        if u is None:
+            continue
+        d = _user_to_dict(u)
+        m = last_map.get(uid)
+        d["last_login_at"] = m.isoformat() if m else None
+        items.append(d)
+
+    if is_readonly_admin(admin):
+        items = [redact_user(it) for it in items]
+
+    return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
 @router.get("/{user_id}")
 @inject
 async def get_user(
     user_id: int,
-    _admin: AdminUser,
+    admin: AdminUser,
     user_dao: FromDishka[UserDao],
     subscription_dao: FromDishka[SubscriptionDao],
     transaction_dao: FromDishka[TransactionDao],
+    session: FromDishka[AsyncSession],
 ) -> dict[str, Any]:
     user = await user_dao.get_by_id(user_id)
     if not user:
@@ -82,10 +142,25 @@ async def get_user(
 
     current_sub = await subscription_dao.get_current(user_id)
     all_subs = await subscription_dao.get_all_by_user(user_id)
-    transactions = await transaction_dao.get_by_user(user_id)
+    login_stats = (
+        await session.execute(
+            text(
+                "SELECT count(*) AS total, count(DISTINCT ip) AS ips, max(created_at) AS last "
+                "FROM login_events WHERE user_id = :u"
+            ),
+            {"u": user_id},
+        )
+    ).first()
+    # Транзакции в карточке — платёжные детали; для read-only их не отдаём.
+    readonly = is_readonly_admin(admin)
+    transactions = [] if readonly else await transaction_dao.get_by_user(user_id)
+
+    user_dict = _user_to_dict(user)
+    if readonly:
+        user_dict = redact_user(user_dict)
 
     return {
-        "user": _user_to_dict(user),
+        "user": user_dict,
         "current_subscription": {
             "status": current_sub.current_status.value,
             "is_trial": current_sub.is_trial,
@@ -97,6 +172,13 @@ async def get_user(
         if current_sub
         else None,
         "subscriptions_count": len(all_subs),
+        "logins": {
+            "total": login_stats.total if login_stats else 0,
+            "distinct_ips": login_stats.ips if login_stats else 0,
+            "last_login_at": login_stats.last.isoformat()
+            if login_stats and login_stats.last
+            else None,
+        },
         "transactions": [
             {
                 "payment_id": str(t.payment_id),
@@ -107,6 +189,52 @@ async def get_user(
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in transactions[:20]
+        ],
+    }
+
+
+@router.get("/{user_id}/logins")
+@inject
+async def user_logins(
+    user_id: int,
+    admin: AdminUser,
+    session: FromDishka[AsyncSession],
+    limit: int = Query(default=50, le=200),
+) -> dict[str, Any]:
+    """История входов: всего, уникальных IP, последние события (время/IP/способ).
+
+    Для read-only админа сами IP-адреса маскируются (видны только счётчики)."""
+    readonly = is_readonly_admin(admin)
+    summary = (
+        await session.execute(
+            text(
+                "SELECT count(*) AS total, count(DISTINCT ip) AS ips, max(created_at) AS last "
+                "FROM login_events WHERE user_id = :u"
+            ),
+            {"u": user_id},
+        )
+    ).first()
+    rows = (
+        await session.execute(
+            text(
+                "SELECT ip, user_agent, method, created_at FROM login_events "
+                "WHERE user_id = :u ORDER BY created_at DESC LIMIT :l"
+            ),
+            {"u": user_id, "l": limit},
+        )
+    ).all()
+    return {
+        "total": summary.total if summary else 0,
+        "distinct_ips": summary.ips if summary else 0,
+        "last_login_at": summary.last.isoformat() if summary and summary.last else None,
+        "items": [
+            {
+                "ip": None if readonly else r.ip,
+                "user_agent": r.user_agent,
+                "method": r.method,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
         ],
     }
 

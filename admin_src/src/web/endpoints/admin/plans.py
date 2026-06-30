@@ -107,6 +107,7 @@ class UpdatePlanRequest(BaseModel):
     device_limit: Optional[int] = None
     order_index: Optional[int] = None
     is_active: Optional[bool] = None
+    is_trial: Optional[bool] = None
     durations: Optional[list[PlanDurationRequest]] = None
 
 
@@ -195,6 +196,8 @@ async def update_plan(
         plan.order_index = body.order_index
     if body.is_active is not None:
         plan.is_active = body.is_active
+    if body.is_trial is not None:
+        plan.is_trial = body.is_trial
     if body.durations is not None:
         plan.durations = _build_durations(body.durations)
 

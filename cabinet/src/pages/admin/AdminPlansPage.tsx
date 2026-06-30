@@ -8,10 +8,10 @@ const AVAILABILITIES = ["ALL", "NEW", "EXISTING"];
 const CURRENCIES = ["RUB", "XTR", "USD"];
 const TRAFFIC_STRATEGIES = ["NO_RESET", "MONTHLY_RESET", "WEEKLY_RESET", "DAILY_RESET"];
 
-function formatTraffic(bytes: number): string {
-  if (bytes === 0) return "∞";
-  const gb = bytes / 1024 ** 3;
-  return `${gb.toFixed(0)} ГБ`;
+// В тарифах traffic_limit хранится в ГБ (не в байтах) — конвертация не нужна.
+function formatTraffic(gb: number): string {
+  if (gb === 0) return "∞";
+  return `${gb} ГБ`;
 }
 
 function PlanModal({
@@ -30,7 +30,7 @@ function PlanModal({
   const [publicCode, setPublicCode] = useState(plan?.public_code ?? "");
   const [type, setType] = useState(plan?.type ?? "BOTH");
   const [availability, setAvailability] = useState(plan?.availability ?? "ALL");
-  const [trafficLimit, setTrafficLimit] = useState(String(plan ? plan.traffic_limit / 1024 ** 3 : 0));
+  const [trafficLimit, setTrafficLimit] = useState(String(plan?.traffic_limit ?? 0));
   const [deviceLimit, setDeviceLimit] = useState(String(plan?.device_limit ?? 1));
   const [trafficStrategy, setTrafficStrategy] = useState(plan?.traffic_limit_strategy ?? "NO_RESET");
   const [isActive, setIsActive] = useState(plan?.is_active ?? false);
@@ -74,11 +74,10 @@ function PlanModal({
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const trafficBytes = Number(trafficLimit) * 1024 ** 3;
     const payload = {
       name, description: description || null, tag: tag || null, public_code: publicCode || null,
       type, availability, traffic_limit_strategy: trafficStrategy,
-      traffic_limit: trafficBytes, device_limit: Number(deviceLimit),
+      traffic_limit: Number(trafficLimit), device_limit: Number(deviceLimit),
       is_active: isActive, is_trial: isTrial, durations,
     };
     try {

@@ -500,7 +500,7 @@ const TG_LINK_RESULTS: Record<string, { type: "success" | "error"; text: string 
   already: { type: "error", text: "К аккаунту уже привязан другой Telegram" },
   conflict: {
     type: "error",
-    text: "У этого Telegram уже есть отдельный аккаунт с подпиской. Объединение пока недоступно — напишите в поддержку.",
+    text: "Этот Telegram уже привязан к другому аккаунту с активной подпиской. Войдите в него напрямую или напишите в поддержку.",
   },
   error: { type: "error", text: "Не удалось привязать Telegram" },
 };

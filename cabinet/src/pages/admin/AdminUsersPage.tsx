@@ -1,22 +1,37 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Search, ChevronLeft, ChevronRight, AlertCircle, X,
-  CalendarPlus, Trash2, Ban, CheckCircle, Gift, RefreshCw, Star, ChevronDown,
+  CalendarPlus, Trash2, Ban, CheckCircle, Gift, RefreshCw, Star, ChevronDown, ChevronUp, LogIn,
 } from "lucide-react";
 import {
   usersAdminApi, subscriptionsAdminApi, plansAdminApi,
   type AdminUser, type AdminUserDetail, type AdminSubscription, type AdminPlan,
+  type LoginHistory,
 } from "@/api/admin";
 import { ApiError } from "@/types/api";
 import { formatDate } from "@/lib/format";
+import { useAuth } from "@/contexts/AuthContext";
 
 const LIMIT = 25;
 
+// Значения совпадают с серверным enum Role: USER=1, PREVIEW=2 (read-only админ),
+// ADMIN=3, DEV=4, OWNER=5, SYSTEM=6.
 const ROLE_LABELS: Record<number, { label: string; cls: string }> = {
-  0: { label: "Пользователь", cls: "text-fg-muted" },
-  10: { label: "Администратор", cls: "text-warning" },
-  100: { label: "Владелец", cls: "text-accent" },
+  1: { label: "Пользователь", cls: "text-fg-muted" },
+  2: { label: "Админ (просмотр)", cls: "text-warning" },
+  3: { label: "Администратор", cls: "text-warning" },
+  4: { label: "Разработчик", cls: "text-accent" },
+  5: { label: "Владелец", cls: "text-accent" },
+  6: { label: "Система", cls: "text-accent" },
 };
+
+// Роли, которые владелец может назначать из кабинета. OWNER/SYSTEM/DEV не даём
+// раздавать через UI — это делается осознанно и редко.
+const ASSIGNABLE_ROLES: { value: number; label: string }[] = [
+  { value: 1, label: "Пользователь" },
+  { value: 2, label: "Админ только для просмотра" },
+  { value: 3, label: "Администратор (полный доступ)" },
+];
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "text-success",
@@ -223,6 +238,49 @@ function SubscriptionPanel({ userId, onUpdated }: { userId: number; onUpdated: (
   );
 }
 
+// ─── Login History ─────────────────────────────────────────────────────────
+
+function LoginHistoryBlock({ userId }: { userId: number }) {
+  const [data, setData] = useState<LoginHistory | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    usersAdminApi.logins(userId).then(setData).catch(() => setData(null));
+  }, [userId]);
+
+  if (!data || data.total === 0) return null;
+
+  const methodLabel = (m: string | null) =>
+    m === "telegram_oidc" ? "Telegram" :
+    m === "telegram_webapp" ? "Telegram Mini App" :
+    m === "telegram" ? "Telegram" :
+    m === "register" ? "Регистрация" :
+    m === "email" ? "Email" : (m ?? "—");
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] p-4">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between gap-2 text-xs font-semibold text-fg">
+        <span className="flex items-center gap-1.5"><LogIn className="h-3.5 w-3.5 text-accent" />История входов</span>
+        <span className="font-normal text-fg-subtle">
+          {data.total} входов · {data.distinct_ips} IP
+          <ChevronDown className={`ml-1 inline h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-1">
+          {data.items.map((e, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs">
+              <span className="text-fg-muted">{e.created_at ? formatDate(e.created_at) : "—"}</span>
+              <span className="text-fg-subtle">{methodLabel(e.method)}</span>
+              <span className="font-mono text-fg">{e.ip ?? "скрыт"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── User Detail Modal ─────────────────────────────────────────────────────
 
 function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClose: () => void; onUpdated: () => void }) {
@@ -233,6 +291,7 @@ function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClo
   const [saving, setSaving] = useState(false);
   const [discountPersonal, setDiscountPersonal] = useState("");
   const [discountPurchase, setDiscountPurchase] = useState("");
+  const { isOwner } = useAuth();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -261,6 +320,18 @@ function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClo
     setSaving(true);
     try {
       await usersAdminApi.setDiscount(userId, Number(discountPersonal), Number(discountPurchase));
+      load(); onUpdated();
+    } catch (e) { alert(e instanceof ApiError ? e.detail : "Ошибка"); }
+    finally { setSaving(false); }
+  };
+
+  const changeRole = async (role: number) => {
+    if (!detail || role === detail.user.role) return;
+    const label = ASSIGNABLE_ROLES.find(r => r.value === role)?.label ?? `роль ${role}`;
+    if (!confirm(`Назначить пользователю «${label}»?`)) return;
+    setSaving(true);
+    try {
+      await usersAdminApi.changeRole(userId, role);
       load(); onUpdated();
     } catch (e) { alert(e instanceof ApiError ? e.detail : "Ошибка"); }
     finally { setSaving(false); }
@@ -321,6 +392,8 @@ function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClo
                       ["Баллы", String(u.points)],
                       ["Зарегистрирован", u.created_at ? formatDate(u.created_at) : "—"],
                       ["Пробный доступен", u.is_trial_available ? "Да" : "Нет"],
+                      ["Последний вход", detail.logins?.last_login_at ? formatDate(detail.logins.last_login_at) : "—"],
+                      ["Входов / уник. IP", detail.logins ? `${detail.logins.total} / ${detail.logins.distinct_ips}` : "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-lg border border-[var(--border)] p-3">
                         <p className="text-fg-subtle mb-0.5">{label}</p>
@@ -328,6 +401,9 @@ function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClo
                       </div>
                     ))}
                   </div>
+
+                  {/* История входов */}
+                  <LoginHistoryBlock userId={userId} />
 
                   {/* Discounts */}
                   <div className="rounded-xl border border-[var(--border)] p-4">
@@ -351,6 +427,33 @@ function UserDetailModal({ userId, onClose, onUpdated }: { userId: number; onClo
                       {saving ? "Сохранение…" : "Сохранить скидки"}
                     </button>
                   </div>
+
+                  {/* Роль — только владелец, и не трогаем владельцев/системных */}
+                  {isOwner && u.role < 4 && (
+                    <div className="rounded-xl border border-[var(--border)] p-4">
+                      <p className="mb-1 text-xs font-semibold text-fg">Роль и доступ</p>
+                      <p className="mb-3 text-[11px] text-fg-subtle">
+                        «Админ только для просмотра» открывает всю админку, но
+                        запрещает любые изменения.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ASSIGNABLE_ROLES.map(r => (
+                          <button
+                            key={r.value}
+                            onClick={() => changeRole(r.value)}
+                            disabled={saving || u.role === r.value}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-default ${
+                              u.role === r.value
+                                ? "border-accent bg-accent/10 text-accent"
+                                : "border-[var(--border)] text-fg-muted hover:bg-bg-subtle hover:text-fg disabled:opacity-50"
+                            }`}
+                          >
+                            {r.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Block */}
                   <button onClick={toggleBlock} disabled={saving}
@@ -392,20 +495,32 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");      // "" = все, иначе число роли
+  const [statusFilter, setStatusFilter] = useState("");  // "", "active", "blocked"
+  const [sortBy, setSortBy] = useState("created_at");    // created_at | last_login | name
+  const [sortOrder, setSortOrder] = useState("desc");    // asc | desc
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { isReadonlyAdmin } = useAuth();
 
   const load = useCallback(() => {
     setLoading(true);
-    usersAdminApi.list({ limit: LIMIT, offset, search: search || undefined })
+    usersAdminApi.list({
+      limit: LIMIT, offset,
+      search: search || undefined,
+      role: roleFilter ? Number(roleFilter) : undefined,
+      blocked: statusFilter === "blocked" ? true : statusFilter === "active" ? false : undefined,
+      sort: sortBy, order: sortOrder,
+    })
       .then(r => { setUsers(r.items); setTotal(r.total); })
       .catch(e => setError(e instanceof ApiError ? e.detail : "Ошибка"))
       .finally(() => setLoading(false));
-  }, [offset, search]);
+  }, [offset, search, roleFilter, statusFilter, sortBy, sortOrder]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSearch = (v: string) => { setSearch(v); setOffset(0); };
+  const setFilter = (fn: () => void) => { fn(); setOffset(0); };
 
   const totalPages = Math.ceil(total / LIMIT);
   const page = Math.floor(offset / LIMIT) + 1;
@@ -427,6 +542,50 @@ export default function AdminUsersPage() {
         />
       </div>
 
+      {/* Фильтры и сортировка */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={roleFilter}
+          onChange={e => setFilter(() => setRoleFilter(e.target.value))}
+          className="h-9 rounded-lg border border-[var(--border)] bg-bg px-2.5 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <option value="">Все роли</option>
+          <option value="1">Пользователь</option>
+          <option value="2">Админ (просмотр)</option>
+          <option value="3">Администратор</option>
+          <option value="5">Владелец</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setFilter(() => setStatusFilter(e.target.value))}
+          className="h-9 rounded-lg border border-[var(--border)] bg-bg px-2.5 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <option value="">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="blocked">Заблокированные</option>
+        </select>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-fg-subtle">Сортировка:</span>
+          <select
+            value={sortBy}
+            onChange={e => setFilter(() => setSortBy(e.target.value))}
+            className="h-9 rounded-lg border border-[var(--border)] bg-bg px-2.5 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="created_at">Дата регистрации</option>
+            <option value="last_login">Последний вход</option>
+            <option value="name">Имя</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setFilter(() => setSortOrder(o => o === "asc" ? "desc" : "asc"))}
+            title={sortOrder === "asc" ? "По возрастанию" : "По убыванию"}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-bg text-fg-muted hover:text-fg"
+          >
+            {sortOrder === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
       {error && <div className="flex items-center gap-2 rounded-lg bg-danger/8 px-4 py-3 text-sm text-danger"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       {loading ? (
@@ -437,7 +596,7 @@ export default function AdminUsersPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-bg-subtle">
-                  {["Пользователь", "Email", "Роль", "Статус", "Подписок", "Дата"].map(h => (
+                  {["Пользователь", "Email", "Роль", "Статус", "ID", "Регистрация", "Посл. вход"].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-fg-muted">{h}</th>
                   ))}
                 </tr>
@@ -445,11 +604,13 @@ export default function AdminUsersPage() {
               <tbody>
                 {users.map((u, i) => {
                   const rInfo = ROLE_LABELS[u.role] ?? { label: `${u.role}`, cls: "text-fg-muted" };
+                  // У read-only id скрыт сервером (null) → карточку не открыть.
+                  const clickable = u.id != null;
                   return (
                     <tr
-                      key={u.id}
-                      onClick={() => setSelectedId(u.id)}
-                      className={`cursor-pointer border-b border-[var(--border)] transition-colors hover:bg-bg-subtle ${i === users.length - 1 ? "border-0" : ""}`}
+                      key={u.id ?? `row-${i}`}
+                      onClick={clickable ? () => setSelectedId(u.id) : undefined}
+                      className={`border-b border-[var(--border)] transition-colors ${clickable ? "cursor-pointer hover:bg-bg-subtle" : ""} ${i === users.length - 1 ? "border-0" : ""}`}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -471,8 +632,9 @@ export default function AdminUsersPage() {
                           <span className="text-xs font-medium text-success">Активен</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-fg-muted font-mono">{u.id}</td>
+                      <td className="px-4 py-3 text-xs text-fg-muted font-mono">{u.id ?? "—"}</td>
                       <td className="px-4 py-3 text-xs text-fg-muted">{u.created_at ? formatDate(u.created_at) : "—"}</td>
+                      <td className="px-4 py-3 text-xs text-fg-muted">{u.last_login_at ? formatDate(u.last_login_at) : "—"}</td>
                     </tr>
                   );
                 })}

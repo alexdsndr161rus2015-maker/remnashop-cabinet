@@ -29,6 +29,8 @@ export default function AdminTransactionsPage() {
   const [offset, setOffset] = useState(0);
   const [status, setStatus] = useState("");
   const [gateway, setGateway] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,8 @@ export default function AdminTransactionsPage() {
         offset,
         status: status || undefined,
         gateway: gateway || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       })
       .then((res) => {
         setItems(res.items);
@@ -47,7 +51,7 @@ export default function AdminTransactionsPage() {
       })
       .catch((e) => setError(e instanceof ApiError ? e.detail : "Ошибка"))
       .finally(() => setLoading(false));
-  }, [offset, status, gateway]);
+  }, [offset, status, gateway, dateFrom, dateTo]);
 
   useEffect(() => {
     load();
@@ -96,6 +100,31 @@ export default function AdminTransactionsPage() {
             </option>
           ))}
         </select>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-fg-muted">с</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setOffset(0); }}
+            className="rounded-xl border border-border-subtle bg-bg-subtle px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <span className="text-xs text-fg-muted">по</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setOffset(0); }}
+            className="rounded-xl border border-border-subtle bg-bg-subtle px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => { setDateFrom(""); setDateTo(""); setOffset(0); }}
+              className="rounded-lg px-2 py-1 text-xs text-fg-muted hover:text-fg"
+            >
+              сброс
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -132,17 +161,17 @@ export default function AdminTransactionsPage() {
                   </td>
                 </tr>
               ) : (
-                items.map((t) => (
+                items.map((t, i) => (
                   <tr
-                    key={t.payment_id}
+                    key={t.payment_id ?? `tx-${i}`}
                     className="border-b border-border-subtle last:border-0 hover:bg-bg-raised transition-colors"
                   >
                     <td className="px-4 py-3 font-mono text-xs text-fg-muted truncate max-w-[100px]">
-                      {t.payment_id.slice(0, 8)}…
+                      {t.payment_id ? `${t.payment_id.slice(0, 8)}…` : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div>
-                        <p className="font-medium text-fg">{t.user_name ?? `#${t.user_id}`}</p>
+                        <p className="font-medium text-fg">{t.user_name ?? (t.user_id != null ? `#${t.user_id}` : "—")}</p>
                         {t.user_email && (
                           <p className="text-xs text-fg-muted">{t.user_email}</p>
                         )}
