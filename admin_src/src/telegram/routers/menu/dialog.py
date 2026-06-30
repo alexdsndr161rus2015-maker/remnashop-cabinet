@@ -3,7 +3,11 @@ from aiogram_dialog import Dialog, StartMode
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.style import Style
 from aiogram_dialog.widgets.text import Const, Format
+from dishka import FromDishka
+from dishka.integrations.aiogram_dialog import inject
 from magic_filter import F
+
+from src.application.common import TranslatorRunner
 
 from src.application.common.policy import Permission
 from src.core.constants import INLINE_QUERY_INVITE, PAYMENT_PREFIX
@@ -54,55 +58,87 @@ custom_buttons = (
     build_buttons_row(3, text_on_click=on_text_button_click),
 )
 
-# ── Геттер меню с флагами кнопок ──────────────────────────────────────────────
-# Оборачиваем базовый menu_getter и добавляем флаги состава кнопок из конфига
-# (assets/menu.json, см. menu_config). Читается на КАЖДЫЙ рендер — поэтому
-# изменения из админки применяются сразу, без перезапуска бота.
-async def menu_getter(**kwargs):
+# Определения 5 «кнопок доступа» (web ВКЛ): тип (webapp/url), текст (i18n-ключ
+# или готовая строка), путь к кабинету и нужна ли активная подписка (connectable).
+# Сами условия показа и порядок применяются в menu_getter ниже.
+_ACCESS_DEFS: dict[str, dict] = {
+    "cabinet_miniapp": {"kind": "webapp", "i18n": "btn-menu.web-cabinet", "path": "", "needs_connect": False},
+    "cabinet_url":     {"kind": "url", "text": "🌐 Кабинет в браузере", "path": "", "needs_connect": False},
+    "connect_miniapp": {"kind": "webapp", "i18n": "btn-menu.connect", "path": "/devices", "needs_connect": True},
+    "connect_url":     {"kind": "url", "i18n": "btn-menu.connect-reserve", "path": "/devices", "needs_connect": True},
+    "remna_sub":       {"kind": "url", "text": "📲 Подписка (резерв)", "sub": True, "needs_connect": True},
+}
+
+
+# ── Геттер меню с флагами и ПОРЯДКОМ кнопок ───────────────────────────────────
+# Оборачиваем базовый menu_getter и:
+#   • прокидываем булевы флаги состава (menu_cabinet_miniapp, …) — для обратной
+#     совместимости с прочими виджетами;
+#   • собираем menu_access_items — упорядоченный список кнопок доступа (web ВКЛ),
+#     отфильтрованный по тем же условиям, что были в статичных when.
+# Конфиг (assets/menu.json) читается на КАЖДЫЙ рендер → состав и порядок из
+# админки применяются сразу, без перезапуска бота.
+@inject
+async def menu_getter(i18n: FromDishka[TranslatorRunner], **kwargs):
     data = await _base_menu_getter(**kwargs)
-    for key, value in load_menu_config().items():
-        data[f"menu_{key}"] = value  # menu_cabinet_miniapp, menu_cabinet_url, …
+    cfg = load_menu_config()
+    for key, value in cfg.items():
+        if isinstance(value, bool):
+            data[f"menu_{key}"] = value
+
+    web_enabled = bool(data.get("web_enabled"))
+    connectable = bool(data.get("connectable"))
+    base_url = (data.get("web_cabinet_url") or "").rstrip("/")
+    sub_url = data.get("subscription_url")
+
+    items: list[dict] = []
+    if web_enabled:
+        for key in cfg.get("order", []):
+            defn = _ACCESS_DEFS.get(key)
+            if not defn or not cfg.get(key):
+                continue
+            if defn["needs_connect"] and not connectable:
+                continue
+            if defn.get("sub"):
+                url = sub_url
+            else:
+                url = (base_url + defn.get("path", "")) if base_url else None
+            if not url:
+                continue
+            text = i18n.get(defn["i18n"]) if "i18n" in defn else defn["text"]
+            items.append({"id": key, "kind": defn["kind"], "text": text, "url": url})
+    data["menu_access_items"] = items
     return data
 
 
-# Кнопки доступа в меню. Видимость каждой управляется флагом из getter'а
-# (F["menu_*"]) — состав редактируется в админке кабинета (страница «Меню»).
-# web ВКЛ: Личный кабинет (Mini App / браузер), Подключиться (→ /devices),
-#          Подписка (сабка Remnawave). web ВЫКЛ: стандартное поведение базы.
-cabinet_connect_buttons = (
-    WebApp(
-        text=I18nFormat("btn-menu.web-cabinet"),
-        url=Format("{web_cabinet_url}"),
-        id="cab_miniapp",
-        when=F["web_enabled"] & F["menu_cabinet_miniapp"],
-        style=Style(ButtonStyle.PRIMARY),
+# Кнопки доступа (web ВКЛ): состав, видимость и ПОРЯДОК берутся из getter'а
+# (menu_access_items — упорядоченный, уже отфильтрованный список из админки).
+# Рендерим через ListGroup: на каждый элемент одна кнопка, тип по item[kind]
+# (webapp = синяя Mini App, url = обычная ссылка). Пустой список → кнопок нет.
+menu_access_list = ListGroup(
+    Row(
+        WebApp(
+            text=Format("{item[text]}"),
+            url=Format("{item[url]}"),
+            id="acc_wa",
+            when=F["item"]["kind"] == "webapp",
+            style=Style(ButtonStyle.PRIMARY),
+        ),
+        Url(
+            text=Format("{item[text]}"),
+            url=Format("{item[url]}"),
+            id="acc_url",
+            when=F["item"]["kind"] == "url",
+        ),
     ),
-    Url(
-        text=Const("🌐 Кабинет в браузере"),
-        url=Format("{web_cabinet_url}"),
-        id="cab_url",
-        when=F["web_enabled"] & F["menu_cabinet_url"],
-    ),
-    WebApp(
-        text=I18nFormat("btn-menu.connect"),
-        url=Format("{web_cabinet_url}/devices"),
-        id="connect_cab_miniapp",
-        when=F["web_enabled"] & F["connectable"] & F["menu_connect_miniapp"],
-        style=Style(ButtonStyle.PRIMARY),
-    ),
-    Url(
-        text=I18nFormat("btn-menu.connect-reserve"),
-        url=Format("{web_cabinet_url}/devices"),
-        id="connect_cab_url",
-        when=F["web_enabled"] & F["connectable"] & F["menu_connect_url"],
-    ),
-    Url(
-        text=Const("📲 Подписка (резерв)"),
-        url=Format("{subscription_url}"),
-        id="remna_sub",
-        when=F["web_enabled"] & F["connectable"] & F["menu_remna_sub"],
-    ),
-    # web ВЫКЛ — стандартное поведение базового бота (сабка Remnawave)
+    id="menu_access",
+    item_id_getter=lambda item: item["id"],
+    items="menu_access_items",
+)
+
+# web ВЫКЛ — стандартное поведение базового бота (Mini App/сабка Remnawave).
+# Эти кнопки в админке не настраиваются (порядок/состав — только для web ВКЛ).
+base_connect_buttons = (
     WebApp(
         text=I18nFormat("btn-menu.connect"),
         url=Format("{connection_url}"),
@@ -122,8 +158,9 @@ menu = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-main-menu"),
     # Кнопки доступа (Личный кабинет Mini App/браузер, Подписка, Подключиться) —
-    # состав редактируется в админке кабинета (страница «Меню»), флаги menu_*.
-    *cabinet_connect_buttons,
+    # состав и ПОРЯДОК редактируются в админке кабинета (страница «Меню»).
+    menu_access_list,
+    *base_connect_buttons,
     Row(
         Button(
             text=I18nFormat("btn-menu.connect-not-available"),

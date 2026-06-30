@@ -1,12 +1,13 @@
 import { adminApi } from "./admin";
 
-// Состав кнопок главного меню бота (когда WEB_ENABLED=true).
+// Состав и порядок кнопок главного меню бота (когда WEB_ENABLED=true).
 export interface MenuConfig {
   cabinet_miniapp: boolean; // «Личный кабинет» через Mini App
   cabinet_url: boolean; // «Кабинет в браузере» — прямая ссылка
   connect_miniapp: boolean; // «Подключиться» → /devices в Mini App
   connect_url: boolean; // «Подключиться» → /devices ссылкой
   remna_sub: boolean; // «Подписка (резерв)» — стандартная сабка Remnawave
+  order: string[]; // порядок кнопок (список ключей сверху вниз)
 }
 
 export const menuAdminApi = {
