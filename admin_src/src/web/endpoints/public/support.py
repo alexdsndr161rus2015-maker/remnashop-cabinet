@@ -3,6 +3,9 @@
 Пользователь видит только свои тикеты; админ — все (см. admin/support.py).
 """
 
+import logging
+import os
+
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, status
@@ -13,6 +16,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ._common import CurrentUser
 
 router = APIRouter(prefix="/support", tags=["Public - Support"])
+
+logger = logging.getLogger(__name__)
+
+
+def _user_label(user) -> str:
+    """Подпись пользователя для владельца (он видит всё): имя · @username · tg-id."""
+    parts = [getattr(user, "name", None) or "—"]
+    uname = getattr(user, "username", None)
+    if uname:
+        parts.append(f"@{uname}")
+    tg = getattr(user, "telegram_id", None)
+    if tg:
+        parts.append(f"tg:{tg}")
+    return " · ".join(parts)
+
+
+def _support_link() -> str:
+    cab = (os.environ.get("WEB_CABINET_URL") or "").strip().rstrip("/")
+    return f"\n\nОткрыть: {cab}/admin/support" if cab else ""
+
+
+async def _notify_owner(text_message: str) -> None:
+    """Шлёт владельцу (BOT_OWNER_ID) уведомление в Telegram. Не роняет запрос."""
+    token = (os.environ.get("BOT_TOKEN") or "").strip()
+    owner = (os.environ.get("BOT_OWNER_ID") or "").strip()
+    if not token or not owner:
+        return
+    try:
+        from aiogram import Bot
+
+        bot = Bot(token)
+        try:
+            await bot.send_message(int(owner), text_message, disable_web_page_preview=True)
+        finally:
+            await bot.session.close()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"support-notify: не смог отправить уведомление владельцу: {e}")
 
 
 class CreateTicketRequest(BaseModel):
@@ -97,6 +137,14 @@ async def create_ticket(
         {"tid": ticket_id, "body": body.message.strip()},
     )
     await session.commit()
+
+    await _notify_owner(
+        f"🎫 Новый тикет #{ticket_id}\n"
+        f"От: {_user_label(user)}\n"
+        f"Тема: {body.subject.strip()}\n\n"
+        f"{body.message.strip()}"
+        f"{_support_link()}"
+    )
     return {"id": ticket_id}
 
 
@@ -141,7 +189,7 @@ async def add_message(
 ) -> dict:
     owned = (
         await session.execute(
-            text("SELECT status FROM support_tickets WHERE id = :id AND user_id = :uid"),
+            text("SELECT subject FROM support_tickets WHERE id = :id AND user_id = :uid"),
             {"id": ticket_id, "uid": user.id},
         )
     ).first()
@@ -159,6 +207,14 @@ async def add_message(
         {"id": ticket_id},
     )
     await session.commit()
+
+    await _notify_owner(
+        f"💬 Новый ответ в тикете #{ticket_id}\n"
+        f"От: {_user_label(user)}\n"
+        f"Тема: {owned.subject}\n\n"
+        f"{body.body.strip()}"
+        f"{_support_link()}"
+    )
     return {"success": True}
 
 
