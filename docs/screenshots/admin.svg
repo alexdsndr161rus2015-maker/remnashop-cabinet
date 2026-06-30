@@ -1,24 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" font-family="Segoe UI, system-ui, sans-serif">
-  <rect width="920" height="560" rx="14" fill="#0a0d15"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" font-family="Segoe UI, system-ui, sans-serif">
+  <rect width="920" height="620" rx="14" fill="#0a0d15"/>
 
   <!-- Sidebar -->
-  <rect x="0" y="0" width="200" height="560" rx="14" fill="#0c1019"/>
-  <rect x="200" y="0" width="1" height="560" fill="#1b2230"/>
+  <rect x="0" y="0" width="200" height="620" rx="14" fill="#0c1019"/>
+  <rect x="200" y="0" width="1" height="620" fill="#1b2230"/>
   <rect x="22" y="26" width="26" height="26" rx="7" fill="#2a1518"/>
   <text x="31" y="44" fill="#f2545b" font-size="13" font-weight="700">A</text>
   <text x="58" y="44" fill="#eef3fb" font-size="14" font-weight="600">Админ</text>
-  <rect x="14" y="72" width="172" height="32" rx="9" fill="#172033"/>
-  <text x="40" y="93" fill="#eef3fb" font-size="13" font-weight="600">Обзор</text>
-  <text x="40" y="128" fill="#9aa7bd" font-size="13">Пользователи</text>
-  <text x="40" y="160" fill="#9aa7bd" font-size="13">Транзакции</text>
-  <text x="40" y="192" fill="#9aa7bd" font-size="13">Тарифы</text>
-  <text x="40" y="224" fill="#9aa7bd" font-size="13">Рассылки</text>
-  <text x="40" y="256" fill="#9aa7bd" font-size="13">RemnaWave</text>
-  <text x="40" y="288" fill="#9aa7bd" font-size="13">Оформление</text>
 
+  <!-- Группы разделов (как в реальном сайдбаре) -->
+  <text x="22" y="80" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">АНАЛИТИКА</text>
+  <rect x="14" y="88" width="172" height="26" rx="8" fill="#172033"/>
+  <text x="40" y="105" fill="#eef3fb" font-size="12.5" font-weight="600">Обзор</text>
+  <text x="40" y="135" fill="#9aa7bd" font-size="12.5">Транзакции</text>
+
+  <text x="22" y="166" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">ПОЛЬЗОВАТЕЛИ</text>
+  <text x="40" y="189" fill="#9aa7bd" font-size="12.5">Пользователи</text>
+  <text x="40" y="211" fill="#9aa7bd" font-size="12.5">Поддержка</text>
+
+  <text x="22" y="240" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">ПРОДАЖИ</text>
+  <text x="40" y="263" fill="#9aa7bd" font-size="12.5">Тарифы</text>
+  <text x="40" y="285" fill="#9aa7bd" font-size="12.5">Промокоды</text>
+  <text x="40" y="307" fill="#9aa7bd" font-size="12.5">Шлюзы</text>
+
+  <text x="22" y="336" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">МАРКЕТИНГ</text>
+  <text x="40" y="359" fill="#9aa7bd" font-size="12.5">Рекл. ссылки</text>
+  <text x="40" y="381" fill="#9aa7bd" font-size="12.5">Рассылки</text>
+
+  <text x="22" y="410" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">КАБИНЕТ</text>
+  <text x="40" y="433" fill="#9aa7bd" font-size="12.5">Оформление</text>
+  <text x="40" y="455" fill="#9aa7bd" font-size="12.5">Информация</text>
+  <text x="40" y="477" fill="#9aa7bd" font-size="12.5">Меню · Приложения</text>
+  <text x="40" y="499" fill="#9aa7bd" font-size="12.5">Письмо</text>
+
+  <text x="22" y="528" fill="#5b6577" font-size="9" font-weight="700" letter-spacing="1">СИСТЕМА</text>
+  <text x="40" y="551" fill="#9aa7bd" font-size="12.5">RemnaWave</text>
+  <text x="40" y="573" fill="#9aa7bd" font-size="12.5">Вход через Telegram</text>
+  <text x="40" y="595" fill="#9aa7bd" font-size="12.5">Настройки · Аудит</text>
+
+  <!-- Заголовок -->
   <text x="236" y="54" fill="#eef3fb" font-size="24" font-weight="700">Обзор</text>
 
-  <!-- Stat tiles -->
+  <!-- Плитки статистики (демонстрационные данные) -->
   <rect x="236" y="84" width="318" height="100" rx="16" fill="#111722" stroke="#1f2a3d"/>
   <text x="258" y="114" fill="#9aa7bd" font-size="12">Пользователи</text>
   <text x="258" y="152" fill="#eef3fb" font-size="28" font-weight="800">1 248</text>
@@ -39,16 +62,20 @@
   <text x="592" y="268" fill="#eef3fb" font-size="28" font-weight="800">4 / 4 <tspan fill="#2ee06a" font-size="13">online</tspan></text>
   <text x="592" y="288" fill="#9aa7bd" font-size="11">обновление каждые 30 сек</text>
 
-  <!-- Table -->
-  <rect x="236" y="316" width="652" height="208" rx="16" fill="#111722" stroke="#1f2a3d"/>
+  <!-- Последние транзакции (демонстрационные данные) -->
+  <rect x="236" y="316" width="652" height="268" rx="16" fill="#111722" stroke="#1f2a3d"/>
   <text x="258" y="346" fill="#eef3fb" font-size="14" font-weight="600">Последние транзакции</text>
   <line x1="258" y1="362" x2="866" y2="362" stroke="#1f2a3d"/>
-  <text x="258" y="388" fill="#9aa7bd" font-size="12">#10241 · СБП</text>
-  <text x="866" y="388" fill="#2ee06a" font-size="12" text-anchor="end">+399 ₽</text>
-  <text x="258" y="420" fill="#9aa7bd" font-size="12">#10240 · Карта</text>
-  <text x="866" y="420" fill="#2ee06a" font-size="12" text-anchor="end">+149 ₽</text>
-  <text x="258" y="452" fill="#9aa7bd" font-size="12">#10239 · Крипто</text>
-  <text x="866" y="452" fill="#2ee06a" font-size="12" text-anchor="end">+1290 ₽</text>
-  <text x="258" y="484" fill="#9aa7bd" font-size="12">#10238 · СБП</text>
-  <text x="866" y="484" fill="#2ee06a" font-size="12" text-anchor="end">+399 ₽</text>
+  <text x="258" y="392" fill="#9aa7bd" font-size="12">#10241 · СБП</text>
+  <text x="866" y="392" fill="#2ee06a" font-size="12" text-anchor="end">+399 ₽</text>
+  <text x="258" y="426" fill="#9aa7bd" font-size="12">#10240 · Карта</text>
+  <text x="866" y="426" fill="#2ee06a" font-size="12" text-anchor="end">+149 ₽</text>
+  <text x="258" y="460" fill="#9aa7bd" font-size="12">#10239 · Крипто</text>
+  <text x="866" y="460" fill="#2ee06a" font-size="12" text-anchor="end">+1290 ₽</text>
+  <text x="258" y="494" fill="#9aa7bd" font-size="12">#10238 · СБП</text>
+  <text x="866" y="494" fill="#2ee06a" font-size="12" text-anchor="end">+399 ₽</text>
+  <text x="258" y="528" fill="#9aa7bd" font-size="12">#10237 · Карта</text>
+  <text x="866" y="528" fill="#2ee06a" font-size="12" text-anchor="end">+299 ₽</text>
+  <text x="258" y="562" fill="#9aa7bd" font-size="12">#10236 · СБП</text>
+  <text x="866" y="562" fill="#2ee06a" font-size="12" text-anchor="end">+399 ₽</text>
 </svg>
