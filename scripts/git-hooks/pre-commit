@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Блокирует коммит дампов БД и файлов секретов. Ловит даже `git add -f` (обход .gitignore).
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$HERE/_guard.sh"
+
+staged="$(git diff --cached --name-only --diff-filter=AM)"
+[ -z "$staged" ] && exit 0
+
+hits="$(printf '%s\n' "$staged" | forbidden_paths | sort -u)"
+[ -z "$hits" ] && exit 0
+
+{
+  echo "🚫 КОММИТ ЗАБЛОКИРОВАН — чувствительные файлы в индексе:"
+  printf '%s\n' "$hits" | sed 's/^/  • /'
+  echo
+  echo "Их нельзя коммитить (утечка данных пользователей/секретов)."
+  echo "Убрать из индекса:  git restore --staged <файл>"
+  echo "Осознанный обход:   git commit --no-verify  (крайне не рекомендуется)"
+} >&2
+exit 1
