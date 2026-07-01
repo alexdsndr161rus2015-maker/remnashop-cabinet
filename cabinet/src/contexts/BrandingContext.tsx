@@ -9,6 +9,7 @@ import {
 } from "react";
 import { appearanceApi, type Appearance } from "@/api/appearance";
 import { lighten, darken, rgba, luminance, normalizeHex } from "@/lib/color";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const DEFAULT_BRAND = "RemnaShop";
 
@@ -76,13 +77,13 @@ export function applyBackground(background: string | null) {
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const [appearance, setAppearance] = useState<Appearance | null>(null);
+  const { resolved } = useTheme();  // "dark" | "light"
 
   const refresh = useCallback(async () => {
     try {
       const a = await appearanceApi.get();
       setAppearance(a);
       applyAccent(a.accent);
-      applyBackground(a.background);
       if (a.brand_name) document.title = `${a.brand_name} — личный кабинет`;
     } catch {
       // Оформление не критично — при ошибке остаются цвета темы.
@@ -92,6 +93,16 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Фон применяем ПО АКТИВНОЙ ТЕМЕ: свой для тёмной/светлой (с фолбэком на
+  // общий legacy-фон). Реагирует на смену темы и на обновление оформления.
+  useEffect(() => {
+    if (!appearance) return;
+    const themed = resolved === "dark"
+      ? appearance.background_dark
+      : appearance.background_light;
+    applyBackground(themed ?? appearance.background);
+  }, [appearance, resolved]);
 
   const value = useMemo(
     () => ({ brandName: appearance?.brand_name || DEFAULT_BRAND, supportUsername: appearance?.support_username ?? null, telegramOidcEnabled: appearance?.telegram_oidc_enabled ?? false, appearance, refresh }),

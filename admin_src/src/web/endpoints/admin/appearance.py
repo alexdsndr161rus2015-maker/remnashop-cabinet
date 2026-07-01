@@ -46,7 +46,9 @@ def _valid_color(value: Optional[str]) -> bool:
 class AppearanceUpdate(BaseModel):
     brand_name: Optional[str] = None
     accent: Optional[str] = None      # hex (#rgb/#rrggbb) или "" чтобы сбросить
-    background: Optional[str] = None  # hex или "" чтобы сбросить
+    background: Optional[str] = None  # legacy общий фон
+    background_dark: Optional[str] = None   # фон тёмной темы (hex / "" сброс)
+    background_light: Optional[str] = None  # фон светлой темы (hex / "" сброс)
 
 
 @router.get("")
@@ -75,7 +77,7 @@ async def update_appearance(body: AppearanceUpdate, _admin: AdminUser) -> dict[s
         else:
             data["brand_name"] = name
 
-    for field in ("accent", "background"):
+    for field in ("accent", "background", "background_dark", "background_light"):
         value = getattr(body, field)
         if value is not None:
             if not _valid_color(value):

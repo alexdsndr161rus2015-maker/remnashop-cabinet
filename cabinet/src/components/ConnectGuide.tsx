@@ -87,15 +87,31 @@ export function ConnectGuide({ subUrl }: { subUrl: string }) {
   const priority = config?.priority || DEFAULT_PRIORITY;
 
   const apps = useMemo(() => {
-    // 1) только приложения под выбранную платформу
+    // 1) встроенные приложения под выбранную платформу
     let list = APPS.filter((a) => a.platforms.includes(platform));
     // 2) если админ ограничил список — оставляем только включённые
     if (config?.enabled) {
       const allow = new Set(config.enabled);
       list = list.filter((a) => allow.has(a.id));
     }
-    // 3) приоритетное приложение — первым
-    return [...list].sort((a, b) => {
+    // 3) свои приложения админа (всегда показываем; deep_link — шаблон с {sub})
+    const custom: AppEntry[] = (config?.custom ?? [])
+      .filter((c) => (c.platforms as Platform[]).includes(platform))
+      .map((c) => {
+        const iu = c.install_url;
+        return {
+          id: c.id,
+          name: c.name,
+          desc: c.desc,
+          platforms: c.platforms as Platform[],
+          deepLink: (sub: string) => c.deep_link.replace("{sub}", sub),
+          install: iu
+            ? (Object.fromEntries(c.platforms.map((p) => [p, iu])) as Partial<Record<Platform, string>>)
+            : {},
+        };
+      });
+    // 4) приоритетное приложение — первым
+    return [...list, ...custom].sort((a, b) => {
       if (a.id === priority) return -1;
       if (b.id === priority) return 1;
       return 0;

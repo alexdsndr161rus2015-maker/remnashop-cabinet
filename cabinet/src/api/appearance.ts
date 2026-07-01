@@ -6,7 +6,9 @@ import { ApiError } from "@/types/api";
 export interface Appearance {
   brand_name: string;
   accent: string | null;
-  background: string | null;
+  background: string | null;          // legacy общий фон (фолбэк)
+  background_dark: string | null;     // фон тёмной темы
+  background_light: string | null;    // фон светлой темы
   support_username: string | null; // username ТП из конфигурации бота (BOT_SUPPORT_USERNAME)
   // URL загруженного логотипа (с cache-busting) или null — тогда дефолтная иконка.
   logo_url?: string | null;
@@ -21,6 +23,8 @@ export interface AdminAppearance {
   brand_name: string | null;
   accent: string | null;
   background: string | null;
+  background_dark: string | null;
+  background_light: string | null;
   brand_name_resolved: string;
   logo_url?: string | null;
 }
@@ -33,7 +37,10 @@ export const appearanceApi = {
 // Изменение оформления — только для админов.
 export const appearanceAdminApi = {
   get: () => adminApi.get<AdminAppearance>("/appearance"),
-  update: (data: { brand_name?: string; accent?: string; background?: string }) =>
+  update: (data: {
+    brand_name?: string; accent?: string; background?: string;
+    background_dark?: string; background_light?: string;
+  }) =>
     adminApi.put<AdminAppearance>("/appearance", data),
   // Загрузка логотипа — multipart, поэтому отдельный fetch (adminApi шлёт JSON).
   uploadLogo: async (file: File): Promise<{ logo_url: string | null }> => {

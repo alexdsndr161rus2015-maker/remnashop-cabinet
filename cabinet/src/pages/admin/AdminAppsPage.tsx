@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import { Save, CheckCircle2, Star, Smartphone } from "lucide-react";
-import { appsAdminApi } from "@/api/apps";
-import { APPS, DEFAULT_PRIORITY } from "@/data/apps";
+import { Save, CheckCircle2, Star, Smartphone, Plus, Trash2 } from "lucide-react";
+import { appsAdminApi, type CustomApp } from "@/api/apps";
+import { APPS, PLATFORMS, DEFAULT_PRIORITY } from "@/data/apps";
 import { ApiError } from "@/types/api";
+
+const EMPTY_CUSTOM = { name: "", desc: "", deep_link: "", install_url: "", platforms: [] as string[] };
 
 export default function AdminAppsPage() {
   const [enabled, setEnabled] = useState<Set<string>>(new Set());
   const [priority, setPriority] = useState<string | null>(null);
+  const [custom, setCustom] = useState<CustomApp[]>([]);
+  const [draft, setDraft] = useState({ ...EMPTY_CUSTOM });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -19,10 +23,38 @@ export default function AdminAppsPage() {
         // enabled === null → показываются все приложения
         setEnabled(new Set(cfg.enabled ?? APPS.map((a) => a.id)));
         setPriority(cfg.priority);
+        setCustom(cfg.custom ?? []);
       })
       .catch((e) => setError(e instanceof ApiError ? e.detail : "Ошибка загрузки"))
       .finally(() => setLoading(false));
   }, []);
+
+  const toggleDraftPlatform = (p: string) =>
+    setDraft((d) => ({
+      ...d,
+      platforms: d.platforms.includes(p) ? d.platforms.filter((x) => x !== p) : [...d.platforms, p],
+    }));
+
+  const addCustom = () => {
+    const name = draft.name.trim();
+    const deep = draft.deep_link.trim();
+    if (!name || !deep) { setError("Укажите название и deep-link (со вставкой {sub})"); return; }
+    setError(null);
+    setCustom((prev) => [
+      ...prev,
+      {
+        id: "",  // сервер сгенерирует
+        name,
+        desc: draft.desc.trim(),
+        platforms: draft.platforms.length ? draft.platforms : PLATFORMS.map((p) => p.id),
+        deep_link: deep,
+        install_url: draft.install_url.trim() || null,
+      },
+    ]);
+    setDraft({ ...EMPTY_CUSTOM });
+  };
+
+  const removeCustom = (i: number) => setCustom((prev) => prev.filter((_, idx) => idx !== i));
 
   const toggle = (id: string) => {
     setEnabled((prev) => {
@@ -44,6 +76,7 @@ export default function AdminAppsPage() {
       await appsAdminApi.update({
         priority: priority || null,
         enabled: Array.from(enabled),
+        custom,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -146,9 +179,75 @@ export default function AdminAppsPage() {
 
       <p className="text-xs text-fg-subtle">
         Если не отмечено ни одно приложение, у пользователей будет пусто — оставьте
-        хотя бы одно. Сам список приложений (deep-link'и) задаётся в коде кабинета
-        (<span className="text-fg">data/apps.ts</span>).
+        хотя бы одно.
       </p>
+
+      {/* Свои приложения */}
+      <section className="rounded-2xl border border-border-subtle bg-bg-subtle p-5">
+        <h2 className="text-sm font-semibold text-fg">Свои приложения</h2>
+        <p className="mt-0.5 text-xs text-fg-muted">
+          Добавьте собственный клиент. В <span className="text-fg">deep-link</span> вставьте{" "}
+          <span className="text-fg font-mono">{"{sub}"}</span> — туда подставится ссылка подписки
+          (напр. <span className="font-mono">myvpn://add/{"{sub}"}</span>).
+        </p>
+
+        {/* Список добавленных */}
+        {custom.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {custom.map((c, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-fg">{c.name}</p>
+                  <p className="truncate text-xs text-fg-muted">
+                    <span className="font-mono">{c.deep_link}</span> · {c.platforms.join(", ")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeCustom(i)}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger/5 text-danger hover:bg-danger/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Форма добавления */}
+        <div className="mt-4 space-y-2 rounded-xl border border-border-subtle bg-bg p-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input className="input" placeholder="Название (напр. MyVPN)" value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <input className="input" placeholder="Описание (необязательно)" value={draft.desc}
+              onChange={(e) => setDraft({ ...draft, desc: e.target.value })} />
+          </div>
+          <input className="input font-mono" placeholder="deep-link: myvpn://add/{sub}" value={draft.deep_link}
+            onChange={(e) => setDraft({ ...draft, deep_link: e.target.value })} />
+          <input className="input" placeholder="Ссылка установки (необязательно)" value={draft.install_url}
+            onChange={(e) => setDraft({ ...draft, install_url: e.target.value })} />
+          <div className="flex flex-wrap gap-2 pt-1">
+            {PLATFORMS.map((p) => (
+              <button key={p.id} type="button" onClick={() => toggleDraftPlatform(p.id)}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  draft.platforms.includes(p.id)
+                    ? "border-accent bg-accent-subtle text-accent"
+                    : "border-border-subtle text-fg-muted hover:text-fg"
+                }`}>
+                {p.label}
+              </button>
+            ))}
+            <span className="self-center text-[11px] text-fg-subtle">
+              {draft.platforms.length ? "" : "не выбрано = все платформы"}
+            </span>
+          </div>
+          <button type="button" onClick={addCustom}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-subtle px-3 py-1.5 text-sm font-medium text-fg hover:bg-bg-overlay">
+            <Plus className="h-4 w-4" /> Добавить приложение
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-fg-subtle">Не забудьте «Сохранить» вверху.</p>
+      </section>
     </div>
   );
 }

@@ -10,7 +10,11 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from src.web.endpoints.public.apps import APPS_PATH, load_apps_config
+from src.web.endpoints.public.apps import (
+    APPS_PATH,
+    load_apps_config,
+    sanitize_custom_apps,
+)
 
 from ._common import AdminUser
 
@@ -20,6 +24,7 @@ router = APIRouter(prefix="/apps", tags=["Admin - Apps"])
 class AppsConfigUpdate(BaseModel):
     priority: Optional[str] = None      # id приоритетного приложения ("" → сброс)
     enabled: Optional[list[str]] = None  # список id (None — не менять)
+    custom: Optional[list[dict[str, Any]]] = None  # свои приложения (None — не менять)
 
 
 @router.get("")
@@ -36,6 +41,8 @@ async def update_apps(body: AppsConfigUpdate, _admin: AdminUser) -> dict[str, An
         data["enabled"] = [str(x) for x in body.enabled][:100]
     if body.priority is not None:
         data["priority"] = body.priority.strip() or None
+    if body.custom is not None:
+        data["custom"] = sanitize_custom_apps(body.custom)
 
     try:
         APPS_PATH.parent.mkdir(parents=True, exist_ok=True)

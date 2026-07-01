@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Save, CheckCircle2, RotateCcw, Palette, ImagePlus, Trash2 } from "lucide-react";
 import { appearanceAdminApi, type AdminAppearance } from "@/api/appearance";
 import { useBranding, applyAccent, applyBackground } from "@/contexts/BrandingContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { normalizeHex } from "@/lib/color";
 import { ApiError } from "@/types/api";
 
 const ACCENT_PRESETS = ["#4d8bff", "#7c5cff", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#06b6d4"];
-const BG_PRESETS = ["#0a0d15", "#101522", "#13111c", "#0e1512", "#f6f4ee", "#ffffff"];
+const DARK_BG_PRESETS = ["#0a0d15", "#101522", "#13111c", "#0e1512", "#111111"];
+const LIGHT_BG_PRESETS = ["#f6f4ee", "#ffffff", "#f1f5f9", "#fafaf9", "#eef2f7"];
 
 function ColorField({
   label,
@@ -74,6 +76,7 @@ function ColorField({
 
 export default function AdminAppearancePage() {
   const { refresh } = useBranding();
+  const { resolved } = useTheme();  // активная тема для предпросмотра фона
   const [form, setForm] = useState<AdminAppearance | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,12 +93,14 @@ export default function AdminAppearancePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Живой предпросмотр: применяем цвета сразу при изменении.
+  // Живой предпросмотр: применяем цвета сразу. Фон — по активной теме
+  // (переключи тему, чтобы увидеть фон другой темы).
   useEffect(() => {
     if (!form) return;
     applyAccent(form.accent);
-    applyBackground(form.background);
-  }, [form?.accent, form?.background]);
+    const themed = resolved === "dark" ? form.background_dark : form.background_light;
+    applyBackground(themed ?? form.background);
+  }, [form?.accent, form?.background, form?.background_dark, form?.background_light, resolved]);
 
   // При уходе со страницы восстанавливаем реально сохранённое оформление
   // (на случай несохранённого предпросмотра).
@@ -114,6 +119,8 @@ export default function AdminAppearancePage() {
         brand_name: form.brand_name ?? "", // пусто → авто-подхват из конфигурации
         accent: form.accent ?? "",
         background: form.background ?? "",
+        background_dark: form.background_dark ?? "",
+        background_light: form.background_light ?? "",
       });
       await refresh(); // перечитать и применить во всём кабинете
       setSaved(true);
@@ -261,11 +268,19 @@ export default function AdminAppearancePage() {
       />
 
       <ColorField
-        label="Цвет фона"
-        hint="Базовый фон. Оттенки поверхностей подбираются автоматически. Выбирайте под активную тему (тёмную/светлую)."
-        value={form.background}
-        presets={BG_PRESETS}
-        onChange={(v) => setForm({ ...form, background: v })}
+        label="Фон — тёмная тема"
+        hint="Применяется, когда у пользователя включена тёмная тема. Оттенки поверхностей и текст подбираются автоматически."
+        value={form.background_dark}
+        presets={DARK_BG_PRESETS}
+        onChange={(v) => setForm({ ...form, background_dark: v })}
+      />
+
+      <ColorField
+        label="Фон — светлая тема"
+        hint="Применяется при светлой теме. Переключите тему кабинета, чтобы увидеть предпросмотр этого фона."
+        value={form.background_light}
+        presets={LIGHT_BG_PRESETS}
+        onChange={(v) => setForm({ ...form, background_light: v })}
       />
 
       {/* Превью */}

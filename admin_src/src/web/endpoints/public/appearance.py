@@ -43,7 +43,9 @@ LOGO_MEDIA_TYPES: dict[str, str] = {
 DEFAULTS: dict[str, Any] = {
     "brand_name": None,
     "accent": None,
-    "background": None,
+    "background": None,        # legacy: общий фон (фолбэк, если нет раздельных)
+    "background_dark": None,   # фон для тёмной темы
+    "background_light": None,  # фон для светлой темы
     "logo_file": None,
 }
 
